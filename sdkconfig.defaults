@@ -1,0 +1,12 @@
+# Общие дефолты для обеих целей.
+# Цель выбирается командой: idf.py set-target esp32c3 (или esp32c6)
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
+
+# Два OTA-слота (ota_0/ota_1 + otadata) вместо factory — задел под
+# обновление по воздуху (esp_https_ota). Менять разметку потом — боль,
+# поэтому закладываем сразу.
+CONFIG_PARTITION_TABLE_TWO_OTA=y
+
+# Плата подключена по нативному USB (без UART-моста): консоль выводим
+# в USB Serial/JTAG, иначе логов в usbmodem не видно.
+CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y

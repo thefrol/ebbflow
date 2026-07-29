@@ -1,0 +1,57 @@
+menu "Ebbflow Lamp"
+
+    config LAMP_DEVICE_NAME
+        string "Имя устройства (hostname, будущий ID для обнаружения)"
+        default "ebbflow-lamp-1"
+        help
+            Используется как hostname в сети. В будущем — основа для
+            mDNS-имени и идентификатора устройства во флоте.
+
+    config LAMP_WIFI_SSID
+        string "Wi-Fi SSID"
+        default "YOUR_SSID"
+
+    config LAMP_WIFI_PASSWORD
+        string "Wi-Fi пароль"
+        default "YOUR_PASSWORD"
+
+    config LAMP_GPIO
+        int "GPIO лампы (выход на реле/драйвер)"
+        default 8
+        range 0 21
+
+    config LAMP_ON_TIME
+        string "Время включения (HH:MM, локальное)"
+        default "06:00"
+
+    config LAMP_OFF_TIME
+        string "Время выключения (HH:MM, локальное)"
+        default "23:00"
+        help
+            Если время выключения раньше времени включения — расписание
+            считается идущим через полночь. Равные значения = свет всегда выключен.
+
+    config LAMP_TIMEZONE
+        string "Часовой пояс (POSIX TZ)"
+        default "MSK-3"
+        help
+            POSIX-формат, знак смещения инвертирован: MSK-3 = UTC+3.
+            Примеры: "MSK-3", "CET-1CEST,M3.5.0,M10.5.0/3".
+
+    choice LAMP_DIAG_MODE
+        prompt "Диагностический режим пина (для отладки железа)"
+        default LAMP_DIAG_NORMAL
+        help
+            Режимы FORCE_OFF/BLINK игнорируют расписание и нужны только
+            для проверки обвязки пина (MOSFET, реле). В боевой прошивке
+            держать NORMAL.
+
+        config LAMP_DIAG_NORMAL
+            bool "Обычный (по расписанию)"
+        config LAMP_DIAG_FORCE_OFF
+            bool "Всегда выключено (пин жёстко в 0)"
+        config LAMP_DIAG_BLINK
+            bool "Мигание 1 Гц"
+    endchoice
+
+endmenu
