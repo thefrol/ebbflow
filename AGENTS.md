@@ -43,8 +43,14 @@ NVS. Чтобы применить новые дефолты из menuconfig н�
   Применяется при создании sdkconfig (после set-target):
   `idf.py -DSDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.defaults.local" set-target esp32c3`
   либо те же строки можно дописать прямо в сгенерированный `sdkconfig`.
-- Разметка флеша: два OTA-слота (`CONFIG_PARTITION_TABLE_TWO_OTA`) —
-  задел под обновление по воздуху, см. `ideas/future.md`.
+- Разметка флеша: два OTA-слота (`CONFIG_PARTITION_TABLE_TWO_OTA`).
+- OTA работает: устройство само опрашивает GitHub Releases и обновляется.
+  Релиз — тегом: `git tag v0.4.0 && git push origin v0.4.0` → CI
+  (`.github/workflows/release.yml`) собирает обе цели в контейнере
+  `espressif/idf:v6.0.2` и публикует релиз с `ebbflow-lamp-<chip>.bin`.
+  Версия прошивки = тег (CI передаёт `-DPROJECT_VER`); не забывать поднимать
+  `project(... VERSION x.y.z)` в корневом `CMakeLists.txt` под новый тег.
+  Wi-Fi креды для CI-сборок — в GitHub Secrets (`WIFI_SSID`, `WIFI_PASSWORD`).
 - Собирать надо под обе цели перед коммитом изменений в коде.
 
 ## Структура
@@ -57,7 +63,13 @@ NVS. Чтобы применить новые дефолты из menuconfig н�
 - `main/time_sync.*` — часовой пояс (POSIX TZ) + SNTP через `esp_netif_sntp`.
 - `main/lamp.*` — GPIO и цикл применения расписания (раз в 15 с, поддерживает
   расписание через полночь).
-- `main/Kconfig.projbuild` — дефолты: Wi-Fi, пин, времена, TZ, имя устройства.
+- `main/ota_update.*` — OTA с GitHub Releases: раз в
+  `CONFIG_LAMP_OTA_CHECK_INTERVAL_MIN` опрашивает `releases/latest`,
+  сравнивает semver с версией прошивки и обновляется через esp_https_ota.
+  Важно: буферы HTTP 2048 — подписанный URL после 302-редиректа GitHub
+  длиной ~900+ байт не влезает в дефолтные 512.
+- `main/Kconfig.projbuild` — дефолты: Wi-Fi, пин, времена, TZ, имя устройства,
+  OTA (репозиторий, интервал).
 - `ideas/` — концепции будущего развития (веб-интерфейс, флот, MQTT, discovery).
 
 ## Соглашения
@@ -75,7 +87,8 @@ NVS. Чтобы применить новые дефолты из menuconfig н�
 
 ## Roadmap (кратко, детали в `ideas/future.md`)
 
-1. **v1 (сейчас)**: расписание из NVS, Wi-Fi + SNTP, один пин.
+1. **v1 (сейчас)**: расписание из NVS, Wi-Fi + SNTP, один пин, OTA с GitHub
+   Releases (релиз = git-тег → CI → устройство само подхватывает).
 2. **v2**: локальный веб-интерфейс на устройстве (HTTP-сервер, REST поверх
    `settings_save`/`lamp_apply_settings`), mDNS `ebbflow-lamp-N.local`.
 3. **v3**: несколько устройств: device ID, обнаружение в LAN, возможно MQTT +

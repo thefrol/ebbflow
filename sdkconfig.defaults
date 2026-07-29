@@ -2,10 +2,11 @@
 # Цель выбирается командой: idf.py set-target esp32c3 (или esp32c6)
 CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
 
-# Два OTA-слота (ota_0/ota_1 + otadata) вместо factory — задел под
-# обновление по воздуху (esp_https_ota). Менять разметку потом — боль,
-# поэтому закладываем сразу.
-CONFIG_PARTITION_TABLE_TWO_OTA=y
+# Своя разметка флеша (partitions.csv): два OTA-слота по ~1.9M без factory.
+# Штатная two_ota держит ещё factory 1M, и слоты 1M тесны для TLS+OTA.
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+CONFIG_PARTITION_TABLE_FILENAME="partitions.csv"
 
 # Плата подключена по нативному USB (без UART-моста): консоль выводим
 # в USB Serial/JTAG, иначе логов в usbmodem не видно.
