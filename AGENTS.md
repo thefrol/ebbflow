@@ -43,9 +43,11 @@ NVS. Чтобы применить новые дефолты из menuconfig н�
   Применяется при создании sdkconfig (после set-target):
   `idf.py -DSDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.defaults.local" set-target esp32c3`
   либо те же строки можно дописать прямо в сгенерированный `sdkconfig`.
-- Разметка флеша: два OTA-слота (`CONFIG_PARTITION_TABLE_TWO_OTA`).
+- Разметка флеша: своя `partitions.csv`, два OTA-слота по ~1.9M без factory.
 - OTA работает: устройство само опрашивает GitHub Releases и обновляется.
-  Релиз — тегом: `git tag v0.4.0 && git push origin v0.4.0` → CI
+  **Полная документация — `docs/ota.md`**; скиллы `.agents/skills/ota`
+  (архитектура и отладка) и `.agents/skills/firmware-release` (выпуск релиза).
+  Релиз — тегом: `git tag v0.5.0 && git push origin v0.5.0` → CI
   (`.github/workflows/release.yml`) собирает обе цели в контейнере
   `espressif/idf:v6.0.2` и публикует релиз с `ebbflow-lamp-<chip>.bin`.
   Версия прошивки = тег (CI передаёт `-DPROJECT_VER`); не забывать поднимать
@@ -70,6 +72,9 @@ NVS. Чтобы применить новые дефолты из menuconfig н�
   длиной ~900+ байт не влезает в дефолтные 512.
 - `main/Kconfig.projbuild` — дефолты: Wi-Fi, пин, времена, TZ, имя устройства,
   OTA (репозиторий, интервал).
+- `partitions.csv` — разметка флеша: 2 OTA-слота по ~1.9M, без factory.
+- `docs/ota.md` — полная документация по OTA (схема, настройки, диагностика).
+- `.agents/skills/` — проектные скиллы: `ota`, `firmware-release`.
 - `ideas/` — концепции будущего развития (веб-интерфейс, флот, MQTT, discovery).
 
 ## Соглашения
