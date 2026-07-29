@@ -36,6 +36,8 @@ jobs:
 
       - name: Сборка прошивки
         run: |
+          # GitHub перебивает entrypoint контейнера — активируем IDF вручную
+          . "$IDF_PATH/export.sh" >/dev/null 2>&1
           idf.py -DSDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.defaults.local" set-target ${{ matrix.target }}
           idf.py -DPROJECT_VER="${GITHUB_REF_NAME#v}" build
           cp build/ebbflow-lamp.bin build/ebbflow-lamp-${{ matrix.target }}.bin
