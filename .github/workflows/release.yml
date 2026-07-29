@@ -1,0 +1,62 @@
+# Сборка прошивки под обе цели и публикация релиза с бинарниками.
+# Устройства опрашивают releases/latest и забирают ассет под свой чип
+# (см. main/ota_update.c). Запуск — пуш тега v*:
+#   git tag v0.3.0 && git push origin v0.3.0
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Сборка ${{ matrix.target }}
+    runs-on: ubuntu-latest
+    container: espressif/idf:v6.0.2
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [esp32c3, esp32c6]
+    steps:
+      - uses: actions/checkout@v4
+
+      # В контейнере idf работаем под root, git ругается на чужой каталог
+      - name: git safe.directory
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Wi-Fi креды из секретов репозитория
+        run: |
+          {
+            echo "CONFIG_LAMP_WIFI_SSID=\"${{ secrets.WIFI_SSID }}\""
+            echo "CONFIG_LAMP_WIFI_PASSWORD=\"${{ secrets.WIFI_PASSWORD }}\""
+          } > sdkconfig.defaults.local
+
+      - name: Сборка прошивки
+        run: |
+          idf.py -DSDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.defaults.local" set-target ${{ matrix.target }}
+          idf.py -DPROJECT_VER="${GITHUB_REF_NAME#v}" build
+          cp build/ebbflow-lamp.bin build/ebbflow-lamp-${{ matrix.target }}.bin
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fw-${{ matrix.target }}
+          path: build/ebbflow-lamp-${{ matrix.target }}.bin
+          retention-days: 7
+
+  release:
+    name: Публикация релиза
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: fw-*
+          merge-multiple: true
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: ebbflow-lamp-*.bin
+          generate_release_notes: true

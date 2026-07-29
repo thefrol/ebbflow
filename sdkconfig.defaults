@@ -10,3 +10,12 @@ CONFIG_PARTITION_TABLE_TWO_OTA=y
 # Плата подключена по нативному USB (без UART-моста): консоль выводим
 # в USB Serial/JTAG, иначе логов в usbmodem не видно.
 CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
+
+# Оптимизация по размеру: с TLS и OTA прошивка упирается в слот 1 МБ
+# при дефолтном -Og. С -Os влезает с большим запасом.
+CONFIG_COMPILER_OPTIMIZATION_SIZE=y
+
+# Откат при неудачной загрузке OTA-образа: новая прошивка должна сама
+# подтвердить работоспособность (esp_ota_mark_app_valid_cancel_rollback
+# в main.c после подключения к Wi-Fi), иначе загрузчик вернёт предыдущую.
+CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y

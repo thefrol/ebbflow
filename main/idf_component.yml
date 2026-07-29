@@ -1,0 +1,3 @@
+# В ESP-IDF v6 компонент json (cJSON) вынесен из ядра в реестр компонентов.
+dependencies:
+  espressif/cjson: "^1.7.18"

@@ -38,6 +38,31 @@ menu "Ebbflow Lamp"
             POSIX-формат, знак смещения инвертирован: MSK-3 = UTC+3.
             Примеры: "MSK-3", "CET-1CEST,M3.5.0,M10.5.0/3".
 
+    config LAMP_OTA_ENABLED
+        bool "OTA-обновления с GitHub Releases"
+        default y
+        help
+            Устройство периодически опрашивает последний релиз репозитория
+            и при появлении новой версии обновляет прошивку по HTTPS
+            (esp_https_ota, разметка с двумя OTA-слотами).
+
+    config LAMP_OTA_REPO
+        string "GitHub-репозиторий с релизами (owner/repo)"
+        default "thefrol/ebbflow"
+        depends on LAMP_OTA_ENABLED
+        help
+            Репозиторий должен быть публичным, иначе в запросах к API
+            понадобится токен (не реализовано).
+
+    config LAMP_OTA_CHECK_INTERVAL_MIN
+        int "Интервал проверки обновлений (минуты)"
+        default 60
+        range 1 1440
+        depends on LAMP_OTA_ENABLED
+        help
+            Анонимный GitHub API разрешает ~60 запросов в час с одного IP,
+            поэтому чаще раза в 10 минут опрашивать бессмысленно.
+
     choice LAMP_DIAG_MODE
         prompt "Диагностический режим пина (для отладки железа)"
         default LAMP_DIAG_NORMAL
