@@ -8,6 +8,7 @@
 #include "ota_update.h"
 #include "settings.h"
 #include "time_sync.h"
+#include "web_server.h"
 #include "wifi_setup.h"
 
 static const char *TAG = "main";
@@ -32,6 +33,7 @@ void app_main(void)
 
     wifi_setup_connect(); // блокируется до получения IP, сама переподключается
     time_sync_start();    // блокируется до синхронизации времени
+    web_server_start(&settings);
 
 #if CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE
     // Самотест пройден (Wi-Fi + время есть) — подтверждаем OTA-образ,

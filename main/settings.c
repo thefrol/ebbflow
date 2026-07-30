@@ -1,11 +1,11 @@
 #include "settings.h"
 
-#include <stdio.h>
-
 #include "esp_log.h"
 #include "nvs.h"
 #include "nvs_flash.h"
 #include "sdkconfig.h"
+
+#include "hhmm.h"
 
 static const char *TAG = "settings";
 
@@ -13,9 +13,9 @@ static const char *TAG = "settings";
 
 static int parse_hhmm(const char *s, int fallback)
 {
-    int h = 0, m = 0;
-    if (sscanf(s, "%d:%d", &h, &m) == 2 && h >= 0 && h < 24 && m >= 0 && m < 60) {
-        return h * 60 + m;
+    int min = 0;
+    if (hhmm_to_min(s, &min)) {
+        return min;
     }
     ESP_LOGW(TAG, "не смог разобрать время '%s', беру дефолт %d:%02d",
              s, fallback / 60, fallback % 60);

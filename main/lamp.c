@@ -8,6 +8,8 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
+#include "schedule.h"
+
 static const char *TAG = "lamp";
 
 static lamp_settings_t s_settings;
@@ -48,18 +50,6 @@ void lamp_apply_settings(const lamp_settings_t *settings)
     s_state = -1; // следующий тик задачи применит состояние заново
 }
 
-static bool schedule_active(int on_min, int off_min, int now_min)
-{
-    if (on_min == off_min) {
-        return false; // вырожденное расписание — свет выключен
-    }
-    if (on_min < off_min) {
-        return now_min >= on_min && now_min < off_min;
-    }
-    // расписание идёт через полночь
-    return now_min >= on_min || now_min < off_min;
-}
-
 static void lamp_task(void *arg)
 {
     for (;;) {
@@ -80,7 +70,7 @@ static void lamp_task(void *arg)
         int now_min = tm_now.tm_hour * 60 + tm_now.tm_min;
 
         desired = (s_settings.enabled &&
-                   schedule_active(s_settings.on_min, s_settings.off_min, now_min))
+                   lamp_schedule_active(s_settings.on_min, s_settings.off_min, now_min))
                       ? 1
                       : 0;
 #endif

@@ -54,6 +54,11 @@ NVS. Чтобы применить новые дефолты из menuconfig н�
   `project(... VERSION x.y.z)` в корневом `CMakeLists.txt` под новый тег.
   Wi-Fi креды для CI-сборок — в GitHub Secrets (`WIFI_SSID`, `WIFI_PASSWORD`).
 - Собирать надо под обе цели перед коммитом изменений в коде.
+- Host-тесты чистой логики (без железа, цель `linux`, Unity): каталог
+  `test/`, запуск `cd test && idf.py --preview set-target linux &&
+  idf.py build && ./build/lamp_host_tests.elf`. Тестируемые модули
+  (`hhmm`, `schedule`) специально не зависят от ESP-IDF — новую чистую
+  логику выносить в такие же модули и покрывать там.
 
 ## Структура
 
@@ -64,12 +69,19 @@ NVS. Чтобы применить новые дефолты из menuconfig н�
   `CONFIG_LAMP_DEVICE_NAME`.
 - `main/time_sync.*` — часовой пояс (POSIX TZ) + SNTP через `esp_netif_sntp`.
 - `main/lamp.*` — GPIO и цикл применения расписания (раз в 15 с, поддерживает
-  расписание через полночь).
+  расписание через полночь). Чистая логика — в `schedule.*`
+  (`lamp_schedule_active`) и `hhmm.*` (разбор/формат "HH:MM"), они без
+  зависимостей от ESP-IDF и покрыты host-тестами из `test/`.
 - `main/ota_update.*` — OTA с GitHub Releases: раз в
   `CONFIG_LAMP_OTA_CHECK_INTERVAL_MIN` опрашивает `releases/latest`,
   сравнивает semver с версией прошивки и обновляется через esp_https_ota.
   Важно: буферы HTTP 2048 — подписанный URL после 302-редиректа GitHub
   длиной ~900+ байт не влезает в дефолтные 512.
+- `main/web_server.*` — локальный веб-интерфейс (порт 80): страничка
+  `main/web/index.html` (встроена через EMBED_FILES) + REST
+  `GET/POST /api/settings` (времена в "HH:MM") и `GET /api/info`
+  (имя/версия/чип — задел под сканер флота). Изменения сохраняются в NVS
+  и применяются на лету через `lamp_apply_settings`.
 - `main/Kconfig.projbuild` — дефолты: Wi-Fi, пин, времена, TZ, имя устройства,
   OTA (репозиторий, интервал).
 - `partitions.csv` — разметка флеша: 2 OTA-слота по ~1.9M, без factory.
@@ -94,7 +106,8 @@ NVS. Чтобы применить новые дефолты из menuconfig н�
 
 1. **v1 (сейчас)**: расписание из NVS, Wi-Fi + SNTP, один пин, OTA с GitHub
    Releases (релиз = git-тег → CI → устройство само подхватывает).
-2. **v2**: локальный веб-интерфейс на устройстве (HTTP-сервер, REST поверх
-   `settings_save`/`lamp_apply_settings`), mDNS `ebbflow-lamp-N.local`.
+2. **v2**: локальный веб-интерфейс на устройстве (сделан: `web_server.*`,
+   REST + страничка, настройки сохраняются в NVS и применяются на лету),
+   mDNS `ebbflow-lamp-N.local`.
 3. **v3**: несколько устройств: device ID, обнаружение в LAN, возможно MQTT +
    внешний контроллер.

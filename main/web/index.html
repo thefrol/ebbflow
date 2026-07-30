@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ebbflow-lamp</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font-family: system-ui, sans-serif; max-width: 24rem; margin: 2rem auto; padding: 0 1rem; }
+  h1 { font-size: 1.3rem; }
+  .meta { opacity: .6; font-size: .85rem; margin-bottom: 1.5rem; }
+  label { display: block; margin: 1rem 0 .25rem; }
+  input[type="time"], input[type="number"] {
+    width: 100%; box-sizing: border-box; padding: .5rem; font-size: 1rem;
+  }
+  .row { display: flex; align-items: center; gap: .5rem; margin: 1rem 0; }
+  .row label { margin: 0; }
+  button {
+    width: 100%; padding: .7rem; font-size: 1rem; margin-top: 1rem; cursor: pointer;
+  }
+  #status { margin-top: 1rem; min-height: 1.2em; }
+  #status.ok { color: #2a7; }
+  #status.err { color: #d44; }
+</style>
+</head>
+<body>
+<h1>ebbflow-lamp</h1>
+<div class="meta" id="meta">загрузка…</div>
+
+<form id="form">
+  <label for="on">Включение</label>
+  <input type="time" id="on" required>
+
+  <label for="off">Выключение</label>
+  <input type="time" id="off" required>
+
+  <label for="gpio">GPIO лампы</label>
+  <input type="number" id="gpio" min="0" max="21" required>
+
+  <div class="row">
+    <input type="checkbox" id="enabled">
+    <label for="enabled">Расписание активно</label>
+  </div>
+
+  <button type="submit">Сохранить</button>
+</form>
+<div id="status"></div>
+
+<script>
+const statusEl = document.getElementById('status');
+
+function setStatus(text, cls) {
+  statusEl.textContent = text;
+  statusEl.className = cls || '';
+}
+
+async function load() {
+  try {
+    const [info, s] = await Promise.all([
+      fetch('/api/info').then(r => r.json()),
+      fetch('/api/settings').then(r => r.json()),
+    ]);
+    document.getElementById('meta').textContent =
+      info.name + ' · v' + info.version + ' · ' + info.chip;
+    document.getElementById('on').value = s.on;
+    document.getElementById('off').value = s.off;
+    document.getElementById('gpio').value = s.gpio;
+    document.getElementById('enabled').checked = s.enabled;
+  } catch (e) {
+    setStatus('не удалось загрузить настройки', 'err');
+  }
+}
+
+document.getElementById('form').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const body = {
+    on: document.getElementById('on').value,
+    off: document.getElementById('off').value,
+    gpio: Number(document.getElementById('gpio').value),
+    enabled: document.getElementById('enabled').checked,
+  };
+  setStatus('сохраняю…');
+  try {
+    const r = await fetch('/api/settings', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(body),
+    });
+    if (r.ok) {
+      setStatus('сохранено', 'ok');
+    } else {
+      setStatus('ошибка: ' + await r.text(), 'err');
+    }
+  } catch (e) {
+    setStatus('нет связи с устройством', 'err');
+  }
+});
+
+load();
+</script>
+</body>
+</html>
