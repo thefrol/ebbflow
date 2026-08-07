@@ -31,6 +31,35 @@ menu "Ebbflow Lamp"
             Если время выключения раньше времени включения — расписание
             считается идущим через полночь. Равные значения = свет всегда выключен.
 
+    choice LAMP_MODE
+        prompt "Режим выхода (дефолт первого запуска)"
+        default LAMP_MODE_SCHEDULE
+        help
+            Только дефолт для первого запуска: дальше режим живёт в NVS
+            и переключается через веб-интерфейс без перепрошивки.
+
+        config LAMP_MODE_SCHEDULE
+            bool "Расписание (свет): вкл/выкл по времени суток"
+        config LAMP_MODE_PULSE
+            bool "Импульсы (полив): короткие включения по таймеру"
+    endchoice
+
+    config LAMP_PULSE_INTERVAL_MIN
+        int "Период импульсов, минуты (дефолт первого запуска)"
+        default 180
+        range 1 1440
+        help
+            Импульсы привязаны к полуночи: начало каждого интервала
+            кратно этому числу минут от 00:00.
+
+    config LAMP_PULSE_DURATION_SEC
+        int "Длительность импульса, секунды (дефолт первого запуска)"
+        default 15
+        range 1 600
+        help
+            Должна быть меньше периода (LAMP_PULSE_INTERVAL_MIN * 60),
+            иначе выход будет всегда выключен (защита в lamp_pulse_active).
+
     config LAMP_TIMEZONE
         string "Часовой пояс (POSIX TZ)"
         default "MSK-3"

@@ -10,7 +10,7 @@
   h1 { font-size: 1.3rem; }
   .meta { opacity: .6; font-size: .85rem; margin-bottom: 1.5rem; }
   label { display: block; margin: 1rem 0 .25rem; }
-  input[type="time"], input[type="number"] {
+  input[type="time"], input[type="number"], select {
     width: 100%; box-sizing: border-box; padding: .5rem; font-size: 1rem;
   }
   .row { display: flex; align-items: center; gap: .5rem; margin: 1rem 0; }
@@ -28,11 +28,27 @@
 <div class="meta" id="meta">загрузка…</div>
 
 <form id="form">
-  <label for="on">Включение</label>
-  <input type="time" id="on" required>
+  <label for="mode">Режим</label>
+  <select id="mode">
+    <option value="schedule">Расписание (свет)</option>
+    <option value="pulse">Импульсы (полив)</option>
+  </select>
 
-  <label for="off">Выключение</label>
-  <input type="time" id="off" required>
+  <div id="schedule-fields">
+    <label for="on">Включение</label>
+    <input type="time" id="on" required>
+
+    <label for="off">Выключение</label>
+    <input type="time" id="off" required>
+  </div>
+
+  <div id="pulse-fields" hidden>
+    <label for="pulse_interval_min">Полив каждые, минут</label>
+    <input type="number" id="pulse_interval_min" min="1" max="1440" required>
+
+    <label for="pulse_duration_sec">Длительность полива, секунд</label>
+    <input type="number" id="pulse_duration_sec" min="1" max="600" required>
+  </div>
 
   <label for="gpio">GPIO лампы</label>
   <input type="number" id="gpio" min="0" max="21" required>
@@ -48,11 +64,20 @@
 
 <script>
 const statusEl = document.getElementById('status');
+const modeEl = document.getElementById('mode');
 
 function setStatus(text, cls) {
   statusEl.textContent = text;
   statusEl.className = cls || '';
 }
+
+// Показываем только поля выбранного режима
+function applyModeVisibility() {
+  const pulse = modeEl.value === 'pulse';
+  document.getElementById('schedule-fields').hidden = pulse;
+  document.getElementById('pulse-fields').hidden = !pulse;
+}
+modeEl.addEventListener('change', applyModeVisibility);
 
 async function load() {
   try {
@@ -62,10 +87,14 @@ async function load() {
     ]);
     document.getElementById('meta').textContent =
       info.name + ' · v' + info.version + ' · ' + info.chip;
+    modeEl.value = s.mode;
     document.getElementById('on').value = s.on;
     document.getElementById('off').value = s.off;
+    document.getElementById('pulse_interval_min').value = s.pulse_interval_min;
+    document.getElementById('pulse_duration_sec').value = s.pulse_duration_sec;
     document.getElementById('gpio').value = s.gpio;
     document.getElementById('enabled').checked = s.enabled;
+    applyModeVisibility();
   } catch (e) {
     setStatus('не удалось загрузить настройки', 'err');
   }
@@ -74,8 +103,11 @@ async function load() {
 document.getElementById('form').addEventListener('submit', async (ev) => {
   ev.preventDefault();
   const body = {
+    mode: modeEl.value,
     on: document.getElementById('on').value,
     off: document.getElementById('off').value,
+    pulse_interval_min: Number(document.getElementById('pulse_interval_min').value),
+    pulse_duration_sec: Number(document.getElementById('pulse_duration_sec').value),
     gpio: Number(document.getElementById('gpio').value),
     enabled: document.getElementById('enabled').checked,
   };

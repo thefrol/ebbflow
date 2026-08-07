@@ -81,6 +81,40 @@ TEST_CASE("schedule: вырожденное расписание — свет в
     }
 }
 
+TEST_CASE("pulse: границы импульса (180 мин / 15 с)", "[pulse]")
+{
+    // импульсы в 00:00, 03:00, 06:00, ...
+    int t_0300 = 3 * 3600;
+    TEST_ASSERT_TRUE(lamp_pulse_active(180, 15, t_0300));         // 03:00:00 старт
+    TEST_ASSERT_TRUE(lamp_pulse_active(180, 15, t_0300 + 14));    // 03:00:14 ещё идёт
+    TEST_ASSERT_FALSE(lamp_pulse_active(180, 15, t_0300 + 15));   // 03:00:15 кончился
+    TEST_ASSERT_FALSE(lamp_pulse_active(180, 15, t_0300 - 1));    // 02:59:59 ещё нет
+    TEST_ASSERT_FALSE(lamp_pulse_active(180, 15, t_0300 + 3600)); // середина интервала
+}
+
+TEST_CASE("pulse: привязка к полуночи", "[pulse]")
+{
+    TEST_ASSERT_TRUE(lamp_pulse_active(180, 15, 0));              // 00:00:00 — начало суток
+    TEST_ASSERT_TRUE(lamp_pulse_active(180, 15, 21 * 3600));      // 21:00 кратно 3 ч
+    TEST_ASSERT_FALSE(lamp_pulse_active(180, 15, 21 * 3600 + 15));
+}
+
+TEST_CASE("pulse: интервал, не делящий сутки — фаза от полуночи", "[pulse]")
+{
+    // 250 мин: импульсы в 00:00, 04:10, 08:20, 12:30, 16:40, 20:50
+    TEST_ASSERT_TRUE(lamp_pulse_active(250, 15, 250 * 60));
+    TEST_ASSERT_TRUE(lamp_pulse_active(250, 15, 2 * 250 * 60));
+    TEST_ASSERT_FALSE(lamp_pulse_active(250, 15, 3 * 3600)); // 03:00 — не начало интервала
+}
+
+TEST_CASE("pulse: вырожденные параметры — всегда выключено", "[pulse]")
+{
+    TEST_ASSERT_FALSE(lamp_pulse_active(0, 15, 0));   // нулевой интервал
+    TEST_ASSERT_FALSE(lamp_pulse_active(180, 0, 0));  // нулевая длительность
+    TEST_ASSERT_FALSE(lamp_pulse_active(1, 60, 0));   // длительность = периоду
+    TEST_ASSERT_FALSE(lamp_pulse_active(1, 120, 30)); // длительность > периода
+}
+
 void app_main(void)
 {
     UNITY_BEGIN();

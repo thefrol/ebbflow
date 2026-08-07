@@ -29,8 +29,11 @@ static char *settings_to_json(const lamp_settings_t *s)
     hhmm_min_to_str(s->off_min, off, sizeof(off));
 
     cJSON *root = cJSON_CreateObject();
+    cJSON_AddStringToObject(root, "mode", s->mode == LAMP_MODE_PULSE ? "pulse" : "schedule");
     cJSON_AddStringToObject(root, "on", on);
     cJSON_AddStringToObject(root, "off", off);
+    cJSON_AddNumberToObject(root, "pulse_interval_min", s->pulse_interval_min);
+    cJSON_AddNumberToObject(root, "pulse_duration_sec", s->pulse_duration_sec);
     cJSON_AddNumberToObject(root, "gpio", s->gpio);
     cJSON_AddBoolToObject(root, "enabled", s->enabled);
 
@@ -133,6 +136,39 @@ static esp_err_t handle_post_settings(httpd_req_t *req)
     if (cJSON_IsBool(enabled)) {
         next.enabled = cJSON_IsTrue(enabled);
     }
+    const cJSON *mode = cJSON_GetObjectItem(root, "mode");
+    if (cJSON_IsString(mode)) {
+        if (strcmp(mode->valuestring, "schedule") == 0) {
+            next.mode = LAMP_MODE_SCHEDULE;
+        } else if (strcmp(mode->valuestring, "pulse") == 0) {
+            next.mode = LAMP_MODE_PULSE;
+        } else {
+            cJSON_Delete(root);
+            return reject_bad_request(req, "mode: ожидается schedule или pulse");
+        }
+    }
+    const cJSON *p_int = cJSON_GetObjectItem(root, "pulse_interval_min");
+    if (cJSON_IsNumber(p_int)) {
+        // Диапазон как в Kconfig (LAMP_PULSE_INTERVAL_MIN)
+        if (p_int->valueint < 1 || p_int->valueint > 1440) {
+            cJSON_Delete(root);
+            return reject_bad_request(req, "pulse_interval_min: допустимо 1–1440");
+        }
+        next.pulse_interval_min = p_int->valueint;
+    }
+    const cJSON *p_dur = cJSON_GetObjectItem(root, "pulse_duration_sec");
+    if (cJSON_IsNumber(p_dur)) {
+        // Диапазон как в Kconfig (LAMP_PULSE_DURATION_SEC)
+        if (p_dur->valueint < 1 || p_dur->valueint > 600) {
+            cJSON_Delete(root);
+            return reject_bad_request(req, "pulse_duration_sec: допустимо 1–600");
+        }
+        next.pulse_duration_sec = p_dur->valueint;
+    }
+    if (next.pulse_duration_sec >= next.pulse_interval_min * 60) {
+        cJSON_Delete(root);
+        return reject_bad_request(req, "pulse_duration_sec должен быть меньше периода");
+    }
     cJSON_Delete(root);
 
     esp_err_t err = settings_save(&next);
@@ -144,9 +180,12 @@ static esp_err_t handle_post_settings(httpd_req_t *req)
 
     s_settings = next;
     lamp_apply_settings(&next);
-    ESP_LOGI(TAG, "настройки обновлены через веб: %02d:%02d–%02d:%02d, gpio %d, %s",
+    ESP_LOGI(TAG, "настройки обновлены через веб: режим %s, %02d:%02d–%02d:%02d, "
+                  "импульсы %d мин/%d с, gpio %d, %s",
+             next.mode == LAMP_MODE_PULSE ? "pulse" : "schedule",
              next.on_min / 60, next.on_min % 60,
              next.off_min / 60, next.off_min % 60,
+             next.pulse_interval_min, next.pulse_duration_sec,
              next.gpio, next.enabled ? "включено" : "выключено");
 
     return send_json(req, settings_to_json(&s_settings));

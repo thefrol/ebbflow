@@ -40,6 +40,13 @@ esp_err_t settings_load(lamp_settings_t *out)
     out->on_min = parse_hhmm(CONFIG_LAMP_ON_TIME, 6 * 60);
     out->off_min = parse_hhmm(CONFIG_LAMP_OFF_TIME, 23 * 60);
     out->enabled = true;
+#ifdef CONFIG_LAMP_MODE_PULSE
+    out->mode = LAMP_MODE_PULSE;
+#else
+    out->mode = LAMP_MODE_SCHEDULE;
+#endif
+    out->pulse_interval_min = CONFIG_LAMP_PULSE_INTERVAL_MIN;
+    out->pulse_duration_sec = CONFIG_LAMP_PULSE_DURATION_SEC;
 
     nvs_handle_t handle;
     esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &handle);
@@ -52,11 +59,17 @@ esp_err_t settings_load(lamp_settings_t *out)
     int32_t off_min = out->off_min;
     int32_t gpio = out->gpio;
     int32_t enabled = out->enabled;
+    int32_t mode = out->mode;
+    int32_t p_int = out->pulse_interval_min;
+    int32_t p_dur = out->pulse_duration_sec;
 
     err = get_or_seed_i32(handle, "on_min", &on_min);
     if (err == ESP_OK) err = get_or_seed_i32(handle, "off_min", &off_min);
     if (err == ESP_OK) err = get_or_seed_i32(handle, "gpio", &gpio);
     if (err == ESP_OK) err = get_or_seed_i32(handle, "enabled", &enabled);
+    if (err == ESP_OK) err = get_or_seed_i32(handle, "mode", &mode);
+    if (err == ESP_OK) err = get_or_seed_i32(handle, "p_int", &p_int);
+    if (err == ESP_OK) err = get_or_seed_i32(handle, "p_dur", &p_dur);
     if (err == ESP_OK) err = nvs_commit(handle);
 
     nvs_close(handle);
@@ -71,6 +84,9 @@ esp_err_t settings_load(lamp_settings_t *out)
     out->off_min = off_min;
     out->gpio = gpio;
     out->enabled = enabled != 0;
+    out->mode = mode == LAMP_MODE_PULSE ? LAMP_MODE_PULSE : LAMP_MODE_SCHEDULE;
+    out->pulse_interval_min = p_int;
+    out->pulse_duration_sec = p_dur;
     return ESP_OK;
 }
 
@@ -86,6 +102,9 @@ esp_err_t settings_save(const lamp_settings_t *settings)
     if (err == ESP_OK) err = nvs_set_i32(handle, "off_min", settings->off_min);
     if (err == ESP_OK) err = nvs_set_i32(handle, "gpio", settings->gpio);
     if (err == ESP_OK) err = nvs_set_i32(handle, "enabled", settings->enabled ? 1 : 0);
+    if (err == ESP_OK) err = nvs_set_i32(handle, "mode", settings->mode);
+    if (err == ESP_OK) err = nvs_set_i32(handle, "p_int", settings->pulse_interval_min);
+    if (err == ESP_OK) err = nvs_set_i32(handle, "p_dur", settings->pulse_duration_sec);
     if (err == ESP_OK) err = nvs_commit(handle);
 
     nvs_close(handle);

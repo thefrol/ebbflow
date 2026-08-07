@@ -33,11 +33,18 @@ esp_err_t lamp_init(const lamp_settings_t *settings)
     s_settings = *settings;
     gpio_drive(s_settings.gpio, 0);
     s_state = 0;
-    ESP_LOGI(TAG, "пин GPIO%d, расписание %02d:%02d — %02d:%02d%s",
-             s_settings.gpio,
-             s_settings.on_min / 60, s_settings.on_min % 60,
-             s_settings.off_min / 60, s_settings.off_min % 60,
-             s_settings.enabled ? "" : " (выключено)");
+    if (s_settings.mode == LAMP_MODE_PULSE) {
+        ESP_LOGI(TAG, "пин GPIO%d, импульсы: каждые %d мин на %d с%s",
+                 s_settings.gpio, s_settings.pulse_interval_min,
+                 s_settings.pulse_duration_sec,
+                 s_settings.enabled ? "" : " (выключено)");
+    } else {
+        ESP_LOGI(TAG, "пин GPIO%d, расписание %02d:%02d — %02d:%02d%s",
+                 s_settings.gpio,
+                 s_settings.on_min / 60, s_settings.on_min % 60,
+                 s_settings.off_min / 60, s_settings.off_min % 60,
+                 s_settings.enabled ? "" : " (выключено)");
+    }
     return ESP_OK;
 }
 
@@ -67,12 +74,23 @@ static void lamp_task(void *arg)
         time_t now = time(NULL);
         struct tm tm_now;
         localtime_r(&now, &tm_now);
-        int now_min = tm_now.tm_hour * 60 + tm_now.tm_min;
 
-        desired = (s_settings.enabled &&
-                   lamp_schedule_active(s_settings.on_min, s_settings.off_min, now_min))
-                      ? 1
-                      : 0;
+        if (s_settings.mode == LAMP_MODE_PULSE) {
+            int now_sec = tm_now.tm_hour * 3600 + tm_now.tm_min * 60 + tm_now.tm_sec;
+            desired = (s_settings.enabled &&
+                       lamp_pulse_active(s_settings.pulse_interval_min,
+                                         s_settings.pulse_duration_sec, now_sec))
+                          ? 1
+                          : 0;
+            // 15-секундный тик съест короткий импульс — тикаем каждую секунду
+            delay = pdMS_TO_TICKS(1000);
+        } else {
+            int now_min = tm_now.tm_hour * 60 + tm_now.tm_min;
+            desired = (s_settings.enabled &&
+                       lamp_schedule_active(s_settings.on_min, s_settings.off_min, now_min))
+                          ? 1
+                          : 0;
+        }
 #endif
 
         if (desired != s_state) {
@@ -82,8 +100,10 @@ static void lamp_task(void *arg)
             time_t now = time(NULL);
             struct tm tm_now;
             localtime_r(&now, &tm_now);
-            ESP_LOGI(TAG, "%02d:%02d — свет %s",
-                     tm_now.tm_hour, tm_now.tm_min, desired ? "ВКЛ" : "ВЫКЛ");
+            ESP_LOGI(TAG, "%02d:%02d:%02d — %s %s",
+                     tm_now.tm_hour, tm_now.tm_min, tm_now.tm_sec,
+                     s_settings.mode == LAMP_MODE_PULSE ? "полив" : "свет",
+                     desired ? "ВКЛ" : "ВЫКЛ");
 #endif
             gpio_drive(s_settings.gpio, desired);
             s_state = desired;
