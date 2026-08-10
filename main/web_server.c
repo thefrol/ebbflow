@@ -11,6 +11,7 @@
 
 #include "lamp.h"
 #include "hhmm.h"
+#include "ota_update.h"
 
 static const char *TAG = "web";
 
@@ -231,6 +232,63 @@ static esp_err_t handle_post_settings(httpd_req_t *req)
     return send_json(req, settings_to_json(&s_settings));
 }
 
+static const char *ota_state_to_str(ota_state_t state)
+{
+    switch (state) {
+    case OTA_STATE_IDLE: return "idle";
+    case OTA_STATE_CHECKING: return "checking";
+    case OTA_STATE_UPDATE_AVAILABLE: return "update_available";
+    case OTA_STATE_DOWNLOADING: return "downloading";
+    case OTA_STATE_REBOOT_PENDING: return "reboot_pending";
+    case OTA_STATE_UP_TO_DATE: return "up_to_date";
+    case OTA_STATE_ERROR: return "error";
+    default: return "unknown";
+    }
+}
+
+static esp_err_t handle_get_update_status(httpd_req_t *req)
+{
+    ota_status_t st;
+    ota_update_get_status(&st);
+
+    cJSON *root = cJSON_CreateObject();
+    cJSON_AddStringToObject(root, "current_version", st.current_version);
+    cJSON_AddStringToObject(root, "available_version", st.available_version);
+    cJSON_AddStringToObject(root, "state", ota_state_to_str(st.state));
+    cJSON_AddStringToObject(root, "error", st.error_message);
+
+    char *json = cJSON_PrintUnformatted(root);
+    cJSON_Delete(root);
+    return send_json(req, json);
+}
+
+static esp_err_t handle_post_update_check(httpd_req_t *req)
+{
+    ESP_LOGI(TAG, "ручная проверка обновления через веб");
+    esp_err_t err = ota_update_check_now();
+    if (err != ESP_OK) {
+        httpd_resp_set_status(req, "503 Service Unavailable");
+        return httpd_resp_sendstr(req, "OTA не настроена");
+    }
+    return handle_get_update_status(req);
+}
+
+static esp_err_t handle_post_update_start(httpd_req_t *req)
+{
+    ESP_LOGI(TAG, "ручной запуск обновления через веб");
+    esp_err_t err = ota_update_start_download();
+    if (err != ESP_OK) {
+        httpd_resp_set_status(req, "409 Conflict");
+        return httpd_resp_sendstr(req, "обновление недоступно или уже выполняется");
+    }
+
+    cJSON *root = cJSON_CreateObject();
+    cJSON_AddStringToObject(root, "status", "started");
+    char *json = cJSON_PrintUnformatted(root);
+    cJSON_Delete(root);
+    return send_json(req, json);
+}
+
 void web_server_start(const lamp_settings_t *settings)
 {
     s_settings = *settings;
@@ -249,6 +307,9 @@ void web_server_start(const lamp_settings_t *settings)
         { .uri = "/api/settings", .method = HTTP_POST, .handler = handle_post_settings },
         { .uri = "/api/status", .method = HTTP_GET, .handler = handle_get_status },
         { .uri = "/api/water-now", .method = HTTP_POST, .handler = handle_post_water_now },
+        { .uri = "/api/update/status", .method = HTTP_GET, .handler = handle_get_update_status },
+        { .uri = "/api/update/check", .method = HTTP_POST, .handler = handle_post_update_check },
+        { .uri = "/api/update/start", .method = HTTP_POST, .handler = handle_post_update_start },
     };
     for (size_t i = 0; i < sizeof(routes) / sizeof(routes[0]); i++) {
         httpd_register_uri_handler(server, &routes[i]);
