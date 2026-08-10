@@ -23,3 +23,16 @@ bool lamp_pulse_active(int interval_min, int duration_sec, int now_sec)
     }
     return (now_sec % interval_sec) < duration_sec;
 }
+
+int lamp_pulse_next_start(int interval_min, int duration_sec, int now_sec)
+{
+    if (interval_min <= 0 || duration_sec <= 0) {
+        return -1;
+    }
+    int interval_sec = interval_min * 60;
+    if (duration_sec >= interval_sec) {
+        return -1;
+    }
+    int offset = now_sec % interval_sec;
+    return now_sec - offset + interval_sec;
+}

@@ -115,6 +115,33 @@ TEST_CASE("pulse: вырожденные параметры — всегда в�
     TEST_ASSERT_FALSE(lamp_pulse_active(1, 120, 30)); // длительность > периода
 }
 
+TEST_CASE("pulse_next_start: границы и привязка к полуночи", "[pulse]")
+{
+    // 180 мин / 15 с: импульсы в 00:00, 03:00, 06:00, ...
+    int t_0300 = 3 * 3600;
+    int t_0600 = 6 * 3600;
+    TEST_ASSERT_EQUAL_INT(t_0600, lamp_pulse_next_start(180, 15, t_0300));       // ровно старт → следующий
+    TEST_ASSERT_EQUAL_INT(t_0600, lamp_pulse_next_start(180, 15, t_0300 + 5));  // внутри импульса → следующий
+    TEST_ASSERT_EQUAL_INT(t_0300, lamp_pulse_next_start(180, 15, t_0300 - 1));  // за секунду до старта
+    TEST_ASSERT_EQUAL_INT(t_0300, lamp_pulse_next_start(180, 15, 1));           // 00:00:01 → 03:00
+}
+
+TEST_CASE("pulse_next_start: интервал, не делящий сутки", "[pulse]")
+{
+    // 250 мин: 00:00, 04:10, 08:20, 12:30, 16:40, 20:50, 01:00, 05:10, ...
+    TEST_ASSERT_EQUAL_INT(250 * 60, lamp_pulse_next_start(250, 15, 1));              // 00:00:01
+    TEST_ASSERT_EQUAL_INT(3 * 250 * 60, lamp_pulse_next_start(250, 15, 2 * 250 * 60 + 10)); // внутри импульса 08:20
+    TEST_ASSERT_EQUAL_INT(6 * 250 * 60, lamp_pulse_next_start(250, 15, 20 * 3600 + 50 * 60 + 30)); // после 20:50 → 01:00
+}
+
+TEST_CASE("pulse_next_start: невалидные параметры", "[pulse]")
+{
+    TEST_ASSERT_EQUAL_INT(-1, lamp_pulse_next_start(0, 15, 0));
+    TEST_ASSERT_EQUAL_INT(-1, lamp_pulse_next_start(180, 0, 0));
+    TEST_ASSERT_EQUAL_INT(-1, lamp_pulse_next_start(1, 60, 0));
+    TEST_ASSERT_EQUAL_INT(-1, lamp_pulse_next_start(1, 120, 30));
+}
+
 void app_main(void)
 {
     UNITY_BEGIN();

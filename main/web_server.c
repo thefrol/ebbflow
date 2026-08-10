@@ -1,6 +1,7 @@
 #include "web_server.h"
 
 #include <string.h>
+#include <time.h>
 
 #include "cJSON.h"
 #include "esp_app_desc.h"
@@ -50,6 +51,32 @@ static esp_err_t send_json(httpd_req_t *req, char *json)
     return err;
 }
 
+// Читает тело запроса целиком в buf (с '\0'). false — тело не влезло.
+static bool read_body(httpd_req_t *req, char *buf, size_t len)
+{
+    if (req->content_len >= len) {
+        return false;
+    }
+    size_t received = 0;
+    while (received < req->content_len) {
+        int ret = httpd_req_recv(req, buf + received, req->content_len - received);
+        if (ret <= 0) {
+            return false;
+        }
+        received += ret;
+    }
+    buf[received] = '\0';
+    return true;
+}
+
+static esp_err_t reject_bad_request(httpd_req_t *req, const char *reason)
+{
+    ESP_LOGW(TAG, "POST отклонён: %s", reason);
+    httpd_resp_set_status(req, "400 Bad Request");
+    httpd_resp_set_type(req, "text/plain");
+    return httpd_resp_sendstr(req, reason);
+}
+
 static esp_err_t handle_get_root(httpd_req_t *req)
 {
     httpd_resp_set_type(req, "text/html");
@@ -73,30 +100,43 @@ static esp_err_t handle_get_settings(httpd_req_t *req)
     return send_json(req, settings_to_json(&s_settings));
 }
 
-// Читает тело запроса целиком в buf (с '\0'). false — тело не влезло.
-static bool read_body(httpd_req_t *req, char *buf, size_t len)
+static esp_err_t handle_get_status(httpd_req_t *req)
 {
-    if (req->content_len >= len) {
-        return false;
+    cJSON *root = cJSON_CreateObject();
+    cJSON_AddStringToObject(root, "mode", s_settings.mode == LAMP_MODE_PULSE ? "pulse" : "schedule");
+    cJSON_AddBoolToObject(root, "enabled", s_settings.enabled);
+    cJSON_AddBoolToObject(root, "manual_pulse_active", lamp_manual_pulse_active());
+
+    time_t next = lamp_next_pulse_time();
+    if (next == (time_t)-1) {
+        cJSON_AddNullToObject(root, "next_pulse_time");
+        cJSON_AddBoolToObject(root, "next_pulse_today", false);
+    } else {
+        struct tm tm_next;
+        localtime_r(&next, &tm_next);
+        char buf[6];
+        hhmm_min_to_str(tm_next.tm_hour * 60 + tm_next.tm_min, buf, sizeof(buf));
+        cJSON_AddStringToObject(root, "next_pulse_time", buf);
+
+        time_t now = time(NULL);
+        struct tm tm_now;
+        localtime_r(&now, &tm_now);
+        cJSON_AddBoolToObject(root, "next_pulse_today",
+                              tm_next.tm_year == tm_now.tm_year && tm_next.tm_yday == tm_now.tm_yday);
     }
-    size_t received = 0;
-    while (received < req->content_len) {
-        int ret = httpd_req_recv(req, buf + received, req->content_len - received);
-        if (ret <= 0) {
-            return false;
-        }
-        received += ret;
-    }
-    buf[received] = '\0';
-    return true;
+
+    char *json = cJSON_PrintUnformatted(root);
+    cJSON_Delete(root);
+    return send_json(req, json);
 }
 
-static esp_err_t reject_bad_request(httpd_req_t *req, const char *reason)
+static esp_err_t handle_post_water_now(httpd_req_t *req)
 {
-    ESP_LOGW(TAG, "POST /api/settings отклонён: %s", reason);
-    httpd_resp_set_status(req, "400 Bad Request");
-    httpd_resp_set_type(req, "text/plain");
-    return httpd_resp_sendstr(req, reason);
+    if (lamp_pulse_now() != ESP_OK) {
+        return reject_bad_request(req, "полив сейчас доступен только в импульсном режиме");
+    }
+    ESP_LOGI(TAG, "ручной полив запущен через веб");
+    return handle_get_status(req);
 }
 
 static esp_err_t handle_post_settings(httpd_req_t *req)
@@ -207,6 +247,8 @@ void web_server_start(const lamp_settings_t *settings)
         { .uri = "/api/info", .method = HTTP_GET, .handler = handle_get_info },
         { .uri = "/api/settings", .method = HTTP_GET, .handler = handle_get_settings },
         { .uri = "/api/settings", .method = HTTP_POST, .handler = handle_post_settings },
+        { .uri = "/api/status", .method = HTTP_GET, .handler = handle_get_status },
+        { .uri = "/api/water-now", .method = HTTP_POST, .handler = handle_post_water_now },
     };
     for (size_t i = 0; i < sizeof(routes) / sizeof(routes[0]); i++) {
         httpd_register_uri_handler(server, &routes[i]);

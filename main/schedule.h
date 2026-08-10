@@ -16,3 +16,8 @@ bool lamp_schedule_active(int on_min, int off_min, int now_min);
 // Невалидные параметры или duration_sec >= interval*60 — выключено
 // (защита от вечно включённого пина).
 bool lamp_pulse_active(int interval_min, int duration_sec, int now_sec);
+
+// Секунды от полуночи до начала следующего импульса (не текущего).
+// Возвращает -1 при невалидных параметрах.
+// Если now_sec попадает в импульс, возвращает старт следующего интервала.
+int lamp_pulse_next_start(int interval_min, int duration_sec, int now_sec);
