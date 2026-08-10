@@ -21,3 +21,14 @@ bool lamp_pulse_active(int interval_min, int duration_sec, int now_sec);
 // Возвращает -1 при невалидных параметрах.
 // Если now_sec попадает в импульс, возвращает старт следующего интервала.
 int lamp_pulse_next_start(int interval_min, int duration_sec, int now_sec);
+
+// Заполняет буферы out_starts и out_day_offsets ближайшими импульсами.
+// past_count — сколько уже завершившихся импульсов включить (<= max_count).
+// future_count — сколько ещё не начавшихся импульсов включить (<= max_count).
+// out_starts[k] — секунды от полуночи дня out_day_offsets[k].
+// out_day_offsets[k] — смещение дня относительно текущих суток
+//                      (0 = сегодня, -1 = вчера, 1 = завтра и т.д.).
+// Возвращает количество записанных элементов или 0 при невалидных параметрах.
+int lamp_pulse_nearest_starts(int interval_min, int duration_sec, int now_sec,
+                              int past_count, int future_count,
+                              int *out_starts, int *out_day_offsets, int max_count);

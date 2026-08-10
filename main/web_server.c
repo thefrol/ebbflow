@@ -11,6 +11,7 @@
 
 #include "lamp.h"
 #include "hhmm.h"
+#include "schedule.h"
 #include "ota_update.h"
 
 static const char *TAG = "web";
@@ -125,6 +126,37 @@ static esp_err_t handle_get_status(httpd_req_t *req)
         cJSON_AddBoolToObject(root, "next_pulse_today",
                               tm_next.tm_year == tm_now.tm_year && tm_next.tm_yday == tm_now.tm_yday);
     }
+
+    cJSON *pulse_times = cJSON_CreateArray();
+    if (s_settings.mode == LAMP_MODE_PULSE && s_settings.enabled) {
+        time_t now = time(NULL);
+        struct tm tm_now;
+        localtime_r(&now, &tm_now);
+        int now_sec = tm_now.tm_hour * 3600 + tm_now.tm_min * 60 + tm_now.tm_sec;
+
+#define PAST_COUNT 2
+#define FUTURE_COUNT 5
+#define NEAREST_COUNT (PAST_COUNT + FUTURE_COUNT)
+        int starts[NEAREST_COUNT];
+        int days[NEAREST_COUNT];
+        int n = lamp_pulse_nearest_starts(s_settings.pulse_interval_min,
+                                          s_settings.pulse_duration_sec,
+                                          now_sec, PAST_COUNT, FUTURE_COUNT,
+                                          starts, days, NEAREST_COUNT);
+        for (int i = 0; i < n; i++) {
+            cJSON *item = cJSON_CreateObject();
+            char buf[6];
+            hhmm_min_to_str(starts[i] / 60, buf, sizeof(buf));
+            cJSON_AddStringToObject(item, "time", buf);
+            cJSON_AddNumberToObject(item, "day_offset", days[i]);
+            cJSON_AddBoolToObject(item, "past", i < PAST_COUNT);
+            cJSON_AddItemToArray(pulse_times, item);
+        }
+#undef PAST_COUNT
+#undef FUTURE_COUNT
+#undef NEAREST_COUNT
+    }
+    cJSON_AddItemToObject(root, "pulse_times", pulse_times);
 
     char *json = cJSON_PrintUnformatted(root);
     cJSON_Delete(root);
