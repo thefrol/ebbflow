@@ -142,6 +142,95 @@ TEST_CASE("pulse_next_start: невалидные параметры", "[pulse]"
     TEST_ASSERT_EQUAL_INT(-1, lamp_pulse_next_start(1, 120, 30));
 }
 
+TEST_CASE("pulse_nearest_starts: обычный случай", "[pulse]")
+{
+    // 180 мин / 15 с, сейчас 10:00:00 — импульсы в ..., 06:00, 09:00, 12:00, ...
+    int starts[7];
+    int days[7];
+    int n = lamp_pulse_nearest_starts(180, 15, 10 * 3600, 2, 5, starts, days, 7);
+    TEST_ASSERT_EQUAL_INT(7, n);
+    // прошедшие: 09:00, 06:00
+    TEST_ASSERT_EQUAL_INT(9 * 3600, starts[0]);
+    TEST_ASSERT_EQUAL_INT(0, days[0]);
+    TEST_ASSERT_EQUAL_INT(6 * 3600, starts[1]);
+    TEST_ASSERT_EQUAL_INT(0, days[1]);
+    // будущие: 12:00, 15:00, 18:00, 21:00, 00:00
+    TEST_ASSERT_EQUAL_INT(12 * 3600, starts[2]);
+    TEST_ASSERT_EQUAL_INT(0, days[2]);
+    TEST_ASSERT_EQUAL_INT(15 * 3600, starts[3]);
+    TEST_ASSERT_EQUAL_INT(0, days[3]);
+    TEST_ASSERT_EQUAL_INT(18 * 3600, starts[4]);
+    TEST_ASSERT_EQUAL_INT(0, days[4]);
+    TEST_ASSERT_EQUAL_INT(21 * 3600, starts[5]);
+    TEST_ASSERT_EQUAL_INT(0, days[5]);
+    TEST_ASSERT_EQUAL_INT(0, starts[6]);
+    TEST_ASSERT_EQUAL_INT(1, days[6]);
+}
+
+TEST_CASE("pulse_nearest_starts: внутри импульса", "[pulse]")
+{
+    // 180 мин / 15 с, сейчас 09:00:05 (внутри импульса 09:00–09:00:15)
+    int starts[3];
+    int days[3];
+    int n = lamp_pulse_nearest_starts(180, 15, 9 * 3600 + 5, 1, 2, starts, days, 3);
+    TEST_ASSERT_EQUAL_INT(3, n);
+    // ближайший прошедший — 06:00 (текущий ещё идёт)
+    TEST_ASSERT_EQUAL_INT(6 * 3600, starts[0]);
+    TEST_ASSERT_EQUAL_INT(0, days[0]);
+    // будущие: 12:00, 15:00
+    TEST_ASSERT_EQUAL_INT(12 * 3600, starts[1]);
+    TEST_ASSERT_EQUAL_INT(0, days[1]);
+    TEST_ASSERT_EQUAL_INT(15 * 3600, starts[2]);
+    TEST_ASSERT_EQUAL_INT(0, days[2]);
+}
+
+TEST_CASE("pulse_nearest_starts: переход через полночь", "[pulse]")
+{
+    // 180 мин / 15 с, сейчас 23:55:00
+    int starts[4];
+    int days[4];
+    int n = lamp_pulse_nearest_starts(180, 15, 23 * 3600 + 55 * 60, 2, 2, starts, days, 4);
+    TEST_ASSERT_EQUAL_INT(4, n);
+    // прошедшие: 21:00, 18:00
+    TEST_ASSERT_EQUAL_INT(21 * 3600, starts[0]);
+    TEST_ASSERT_EQUAL_INT(0, days[0]);
+    TEST_ASSERT_EQUAL_INT(18 * 3600, starts[1]);
+    TEST_ASSERT_EQUAL_INT(0, days[1]);
+    // будущие: 00:00 (завтра), 03:00 (завтра)
+    TEST_ASSERT_EQUAL_INT(0, starts[2]);
+    TEST_ASSERT_EQUAL_INT(1, days[2]);
+    TEST_ASSERT_EQUAL_INT(3 * 3600, starts[3]);
+    TEST_ASSERT_EQUAL_INT(1, days[3]);
+}
+
+TEST_CASE("pulse_nearest_starts: интервал 170 мин", "[pulse]")
+{
+    // 170 мин: импульсы в 00:00, 02:50, 05:40, 08:30, 11:20, 14:10, 17:00, 19:50, 22:40, 01:30, ...
+    int starts[3];
+    int days[3];
+    // сейчас 12:00:00 — последний прошедший 11:20, следующий 14:10
+    int n = lamp_pulse_nearest_starts(170, 15, 12 * 3600, 1, 2, starts, days, 3);
+    TEST_ASSERT_EQUAL_INT(3, n);
+    TEST_ASSERT_EQUAL_INT(11 * 3600 + 20 * 60, starts[0]);
+    TEST_ASSERT_EQUAL_INT(0, days[0]);
+    TEST_ASSERT_EQUAL_INT(14 * 3600 + 10 * 60, starts[1]);
+    TEST_ASSERT_EQUAL_INT(0, days[1]);
+    TEST_ASSERT_EQUAL_INT(17 * 3600, starts[2]);
+    TEST_ASSERT_EQUAL_INT(0, days[2]);
+}
+
+TEST_CASE("pulse_nearest_starts: невалидные параметры", "[pulse]")
+{
+    int starts[4];
+    int days[4];
+    TEST_ASSERT_EQUAL_INT(0, lamp_pulse_nearest_starts(0, 15, 0, 1, 1, starts, days, 4));
+    TEST_ASSERT_EQUAL_INT(0, lamp_pulse_nearest_starts(180, 0, 0, 1, 1, starts, days, 4));
+    TEST_ASSERT_EQUAL_INT(0, lamp_pulse_nearest_starts(1, 60, 0, 1, 1, starts, days, 4));
+    TEST_ASSERT_EQUAL_INT(0, lamp_pulse_nearest_starts(180, 15, -1, 1, 1, starts, days, 4));
+    TEST_ASSERT_EQUAL_INT(0, lamp_pulse_nearest_starts(180, 15, 24 * 3600, 1, 1, starts, days, 4));
+    TEST_ASSERT_EQUAL_INT(0, lamp_pulse_nearest_starts(180, 15, 0, 0, 0, NULL, NULL, 0));
+}
+
 void app_main(void)
 {
     UNITY_BEGIN();
