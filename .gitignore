@@ -4,3 +4,6 @@ sdkconfig.old
 sdkconfig.defaults.local
 dependencies.lock
 managed_components/
+web/node_modules/
+web/dist/
+

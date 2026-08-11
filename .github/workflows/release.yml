@@ -27,6 +27,15 @@ jobs:
       - name: git safe.directory
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
+      - name: Install Node.js for frontend build
+        run: |
+          # Контейнер espressif/idf не содержит Node.js, ставим официальный бинарь
+          NODE_VERSION=22.21.0
+          curl -fsSL "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-x64.tar.xz" \
+            | tar -xJ -C /usr/local --strip-components=1
+          node --version
+          npm --version
+
       - name: Wi-Fi креды из секретов репозитория
         run: |
           {

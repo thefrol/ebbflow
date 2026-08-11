@@ -16,9 +16,9 @@
 
 static const char *TAG = "web";
 
-// Страничка встраивается в прошивку (EMBED_FILES "web/index.html").
-extern const char index_html_start[] asm("_binary_index_html_start");
-extern const char index_html_end[] asm("_binary_index_html_end");
+// Сжатый HTML frontend встраивается в прошивку (EMBED_FILES "web/dist/index.html.gz").
+extern const char index_html_gz_start[] asm("_binary_index_html_gz_start");
+extern const char index_html_gz_end[] asm("_binary_index_html_gz_end");
 
 // Текущие настройки: копия от старта, обновляется из POST /api/settings.
 // Пишется только из задачи httpd (один писатель), мьютекс не нужен.
@@ -82,7 +82,8 @@ static esp_err_t reject_bad_request(httpd_req_t *req, const char *reason)
 static esp_err_t handle_get_root(httpd_req_t *req)
 {
     httpd_resp_set_type(req, "text/html");
-    return httpd_resp_send(req, index_html_start, index_html_end - index_html_start);
+    httpd_resp_set_hdr(req, "Content-Encoding", "gzip");
+    return httpd_resp_send(req, index_html_gz_start, index_html_gz_end - index_html_gz_start);
 }
 
 static esp_err_t handle_get_info(httpd_req_t *req)
