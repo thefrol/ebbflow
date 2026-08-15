@@ -14,7 +14,7 @@ if (cssLinkMatch) {
   const cssName = cssLinkMatch[1]
   const cssPath = path.join(distDir, 'assets', cssName)
   const css = fs.readFileSync(cssPath, 'utf-8')
-  html = html.replace(cssLinkMatch[0], `<style>${css}</style>`)
+  html = html.replace(cssLinkMatch[0], () => `<style>${css}</style>`)
   fs.rmSync(cssPath, { force: true })
 }
 
@@ -24,7 +24,10 @@ if (scriptMatch) {
   const jsName = scriptMatch[1]
   const jsPath = path.join(distDir, 'assets', jsName)
   const js = fs.readFileSync(jsPath, 'utf-8')
-  html = html.replace(scriptMatch[0], `<script type="module">${js}</script>`)
+    // Экранируем </script> внутри inline JS, иначе браузер преждевременно
+    // закроет <script> и остаток страницы отобразится как текст.
+    .replace(/<\/script>/gi, '<\\/script>')
+  html = html.replace(scriptMatch[0], () => `<script type="module">${js}</script>`)
   fs.rmSync(jsPath, { force: true })
 }
 
