@@ -33,6 +33,18 @@ static esp_err_t get_or_seed_i32(nvs_handle_t handle, const char *key, int32_t *
     return err;
 }
 
+// То же для строки.
+static esp_err_t get_or_seed_str(nvs_handle_t handle, const char *key, char *value, size_t max_len)
+{
+    size_t len = max_len;
+    esp_err_t err = nvs_get_str(handle, key, value, &len);
+    if (err == ESP_ERR_NVS_NOT_FOUND) {
+        ESP_LOGI(TAG, "первый запуск: %s = %s (из menuconfig)", key, value);
+        err = nvs_set_str(handle, key, value);
+    }
+    return err;
+}
+
 esp_err_t settings_load(lamp_settings_t *out)
 {
     // Дефолты из Kconfig
@@ -47,6 +59,7 @@ esp_err_t settings_load(lamp_settings_t *out)
 #endif
     out->pulse_interval_min = CONFIG_LAMP_PULSE_INTERVAL_MIN;
     out->pulse_duration_sec = CONFIG_LAMP_PULSE_DURATION_SEC;
+    strlcpy(out->name, CONFIG_LAMP_DEVICE_NAME, sizeof(out->name));
 
     nvs_handle_t handle;
     esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &handle);
@@ -70,6 +83,7 @@ esp_err_t settings_load(lamp_settings_t *out)
     if (err == ESP_OK) err = get_or_seed_i32(handle, "mode", &mode);
     if (err == ESP_OK) err = get_or_seed_i32(handle, "p_int", &p_int);
     if (err == ESP_OK) err = get_or_seed_i32(handle, "p_dur", &p_dur);
+    if (err == ESP_OK) err = get_or_seed_str(handle, "name", out->name, sizeof(out->name));
     if (err == ESP_OK) err = nvs_commit(handle);
 
     nvs_close(handle);
@@ -105,6 +119,7 @@ esp_err_t settings_save(const lamp_settings_t *settings)
     if (err == ESP_OK) err = nvs_set_i32(handle, "mode", settings->mode);
     if (err == ESP_OK) err = nvs_set_i32(handle, "p_int", settings->pulse_interval_min);
     if (err == ESP_OK) err = nvs_set_i32(handle, "p_dur", settings->pulse_duration_sec);
+    if (err == ESP_OK) err = nvs_set_str(handle, "name", settings->name);
     if (err == ESP_OK) err = nvs_commit(handle);
 
     nvs_close(handle);

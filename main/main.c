@@ -5,6 +5,7 @@
 #include "sdkconfig.h"
 
 #include "lamp.h"
+#include "mdns_discovery.h"
 #include "ota_update.h"
 #include "settings.h"
 #include "time_sync.h"
@@ -31,8 +32,9 @@ void app_main(void)
     }
     ESP_ERROR_CHECK(lamp_init(&settings));
 
-    wifi_setup_connect(); // блокируется до получения IP, сама переподключается
+    wifi_setup_connect(&settings); // блокируется до получения IP, сама переподключается
     time_sync_start();    // блокируется до синхронизации времени
+    mdns_discovery_init(&settings);
     web_server_start(&settings);
 
 #if CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE

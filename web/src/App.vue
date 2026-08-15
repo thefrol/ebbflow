@@ -15,6 +15,11 @@
       <Card title="Настройки">
         <form @submit.prevent="onSubmit">
           <div class="form-group">
+            <label for="name">Имя устройства</label>
+            <input id="name" v-model="settings.name" type="text" maxlength="31" required />
+          </div>
+
+          <div class="form-group">
             <label for="mode">Режим</label>
             <select id="mode" v-model="settings.mode">
               <option value="schedule">Расписание (свет)</option>
@@ -48,6 +53,19 @@
         </form>
       </Card>
 
+      <Card title="Другие лампы">
+        <div v-if="peersLoading" class="peers-status">поиск…</div>
+        <div v-else-if="peers.length === 0" class="peers-status">никого не найдено</div>
+        <ul v-else class="peers-list">
+          <li v-for="peer in peers" :key="peer.id">
+            <a :href="peerUrl(peer)" target="_blank" rel="noopener">
+              {{ peer.name }}
+            </a>
+            <span class="peer-meta">· v{{ peer.version }} · {{ peer.chip }} · {{ peer.mode }}</span>
+          </li>
+        </ul>
+      </Card>
+
       <Card title="Обновление прошивки">
         <OtaPanel :status="updateStatus" :busy="otaBusy" @check="onCheckUpdate" @start="onStartUpdate" />
       </Card>
@@ -64,6 +82,7 @@ import PulseForm from './components/PulseForm.vue'
 import OtaPanel from './components/OtaPanel.vue'
 import {
   getInfo,
+  getPeers,
   getSettings,
   saveSettings,
   getStatus,
@@ -72,7 +91,7 @@ import {
   checkUpdate,
   startUpdate,
 } from './api.ts'
-import type { LampInfo, LampSettings, LampStatus, UpdateStatus } from './types.ts'
+import type { LampInfo, LampPeer, LampSettings, LampStatus, UpdateStatus } from './types.ts'
 
 const loading = ref(true)
 const saving = ref(false)
@@ -80,10 +99,12 @@ const busy = ref(false)
 const otaBusy = ref(false)
 const saveMessage = ref('')
 const saveKind = ref<'ok' | 'err' | 'info' | ''>('')
+const peersLoading = ref(false)
 
 const info = ref<LampInfo | null>(null)
 const settings = ref<LampSettings>({
   mode: 'schedule',
+  name: 'ebbflow-lamp',
   on: '08:00',
   off: '20:00',
   pulse_interval_min: 60,
@@ -98,6 +119,7 @@ const updateStatus = ref<UpdateStatus>({
   state: 'idle',
   error: '',
 })
+const peers = ref<LampPeer[]>([])
 
 async function load() {
   try {
@@ -107,6 +129,24 @@ async function load() {
   } catch (e) {
     showSave('не удалось загрузить настройки', 'err')
   }
+}
+
+async function updatePeers() {
+  peersLoading.value = true
+  try {
+    peers.value = await getPeers()
+  } catch (e) {
+    peers.value = []
+  } finally {
+    peersLoading.value = false
+  }
+}
+
+function peerUrl(peer: LampPeer) {
+  if (peer.host) {
+    return `http://${peer.host}/`
+  }
+  return `http://${peer.ip}:${peer.port}/`
 }
 
 async function updateStatusInfo() {
@@ -196,10 +236,12 @@ onMounted(async () => {
   await load()
   await updateStatusInfo()
   await updateOtaInfo()
+  await updatePeers()
   loading.value = false
 
   const statusInterval = setInterval(updateStatusInfo, 5000)
   const otaInterval = setInterval(updateOtaInfo, 5000)
+  const peersInterval = setInterval(updatePeers, 30000)
 
   watch(
     () => settings.value.mode,

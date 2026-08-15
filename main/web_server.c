@@ -13,6 +13,7 @@
 #include "hhmm.h"
 #include "schedule.h"
 #include "ota_update.h"
+#include "mdns_discovery.h"
 
 static const char *TAG = "web";
 
@@ -33,6 +34,7 @@ static char *settings_to_json(const lamp_settings_t *s)
 
     cJSON *root = cJSON_CreateObject();
     cJSON_AddStringToObject(root, "mode", s->mode == LAMP_MODE_PULSE ? "pulse" : "schedule");
+    cJSON_AddStringToObject(root, "name", s->name);
     cJSON_AddStringToObject(root, "on", on);
     cJSON_AddStringToObject(root, "off", off);
     cJSON_AddNumberToObject(root, "pulse_interval_min", s->pulse_interval_min);
@@ -89,9 +91,35 @@ static esp_err_t handle_get_root(httpd_req_t *req)
 static esp_err_t handle_get_info(httpd_req_t *req)
 {
     cJSON *root = cJSON_CreateObject();
-    cJSON_AddStringToObject(root, "name", CONFIG_LAMP_DEVICE_NAME);
+    cJSON_AddStringToObject(root, "name", s_settings.name);
     cJSON_AddStringToObject(root, "version", esp_app_get_description()->version);
     cJSON_AddStringToObject(root, "chip", CONFIG_IDF_TARGET);
+
+    char *json = cJSON_PrintUnformatted(root);
+    cJSON_Delete(root);
+    return send_json(req, json);
+}
+
+#define PEERS_MAX 8
+
+static esp_err_t handle_get_peers(httpd_req_t *req)
+{
+    mdns_peer_t peers[PEERS_MAX];
+    int n = mdns_discovery_browse(peers, PEERS_MAX);
+
+    cJSON *root = cJSON_CreateArray();
+    for (int i = 0; i < n; i++) {
+        cJSON *item = cJSON_CreateObject();
+        cJSON_AddStringToObject(item, "id", peers[i].id);
+        cJSON_AddStringToObject(item, "name", peers[i].name);
+        cJSON_AddStringToObject(item, "host", peers[i].host);
+        cJSON_AddStringToObject(item, "ip", peers[i].ip);
+        cJSON_AddNumberToObject(item, "port", peers[i].port);
+        cJSON_AddStringToObject(item, "version", peers[i].version);
+        cJSON_AddStringToObject(item, "chip", peers[i].chip);
+        cJSON_AddStringToObject(item, "mode", peers[i].mode);
+        cJSON_AddItemToArray(root, item);
+    }
 
     char *json = cJSON_PrintUnformatted(root);
     cJSON_Delete(root);
@@ -210,6 +238,15 @@ static esp_err_t handle_post_settings(httpd_req_t *req)
     if (cJSON_IsBool(enabled)) {
         next.enabled = cJSON_IsTrue(enabled);
     }
+    const cJSON *name = cJSON_GetObjectItem(root, "name");
+    if (cJSON_IsString(name)) {
+        if (strlen(name->valuestring) >= sizeof(next.name)) {
+            cJSON_Delete(root);
+            return reject_bad_request(req, "name: слишком длинное имя");
+        }
+        strlcpy(next.name, name->valuestring, sizeof(next.name));
+    }
+
     const cJSON *mode = cJSON_GetObjectItem(root, "mode");
     if (cJSON_IsString(mode)) {
         if (strcmp(mode->valuestring, "schedule") == 0) {
@@ -254,6 +291,7 @@ static esp_err_t handle_post_settings(httpd_req_t *req)
 
     s_settings = next;
     lamp_apply_settings(&next);
+    mdns_discovery_update_mode(next.mode);
     ESP_LOGI(TAG, "настройки обновлены через веб: режим %s, %02d:%02d–%02d:%02d, "
                   "импульсы %d мин/%d с, gpio %d, %s",
              next.mode == LAMP_MODE_PULSE ? "pulse" : "schedule",
@@ -336,6 +374,7 @@ void web_server_start(const lamp_settings_t *settings)
     const httpd_uri_t routes[] = {
         { .uri = "/", .method = HTTP_GET, .handler = handle_get_root },
         { .uri = "/api/info", .method = HTTP_GET, .handler = handle_get_info },
+        { .uri = "/api/peers", .method = HTTP_GET, .handler = handle_get_peers },
         { .uri = "/api/settings", .method = HTTP_GET, .handler = handle_get_settings },
         { .uri = "/api/settings", .method = HTTP_POST, .handler = handle_post_settings },
         { .uri = "/api/status", .method = HTTP_GET, .handler = handle_get_status },

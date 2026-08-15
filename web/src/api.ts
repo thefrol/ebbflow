@@ -1,4 +1,4 @@
-import type { LampInfo, LampSettings, LampStatus, UpdateStatus } from './types.ts'
+import type { LampInfo, LampPeer, LampSettings, LampStatus, UpdateStatus } from './types.ts'
 
 class ApiError extends Error {
   constructor(message: string) {
@@ -18,6 +18,10 @@ async function req<T>(url: string, init?: RequestInit): Promise<T> {
 
 export function getInfo() {
   return req<LampInfo>('/api/info')
+}
+
+export function getPeers() {
+  return req<LampPeer[]>('/api/peers')
 }
 
 export function getSettings() {

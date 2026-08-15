@@ -21,6 +21,7 @@ typedef struct {
     int pulse_duration_sec; // длительность импульса, секунды (режим pulse)
     int gpio;              // выходной пин лампы
     bool enabled;          // расписание активно
+    char name[32];         // имя устройства (hostname, mDNS)
 } lamp_settings_t;
 
 // Загружает настройки из NVS. При первом запуске (ключей нет)

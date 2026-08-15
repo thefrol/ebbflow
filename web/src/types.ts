@@ -1,5 +1,6 @@
 export interface LampSettings {
   mode: 'schedule' | 'pulse'
+  name: string
   on: string
   off: string
   pulse_interval_min: number
@@ -12,6 +13,17 @@ export interface LampInfo {
   name: string
   version: string
   chip: string
+}
+
+export interface LampPeer {
+  id: string
+  name: string
+  host: string
+  ip: string
+  port: number
+  version: string
+  chip: string
+  mode: 'schedule' | 'pulse'
 }
 
 export interface PulseTime {
