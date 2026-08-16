@@ -7,3 +7,6 @@ managed_components/
 web/node_modules/
 web/dist/
 
+# macOS
+.DS_Store
+
