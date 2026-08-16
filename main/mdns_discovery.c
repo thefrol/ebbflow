@@ -13,6 +13,7 @@ static const char *TAG = "mdns";
 
 static char s_self_id[MDNS_PEER_ID_LEN];
 static char s_self_name[MDNS_PEER_NAME_LEN];
+static char s_self_host[MDNS_PEER_HOST_LEN];
 
 // Формирует id из MAC (6 байт -> 12 hex + '\0').
 static void mac_to_id_string(char *out, size_t out_len)
@@ -59,6 +60,9 @@ esp_err_t mdns_discovery_init(const lamp_settings_t *settings)
 {
     mac_to_id_string(s_self_id, sizeof(s_self_id));
     strlcpy(s_self_name, settings->name, sizeof(s_self_name));
+    // Hostname должен быть уникальным в локалке, иначе mDNS-коллизии.
+    // Для человеческого имени служит instance_name, а hostname добавляем ID по MAC.
+    snprintf(s_self_host, sizeof(s_self_host), "%s-%s", settings->name, s_self_id);
 
     esp_err_t err = mdns_init();
     if (err != ESP_OK) {
@@ -66,13 +70,13 @@ esp_err_t mdns_discovery_init(const lamp_settings_t *settings)
         return err;
     }
 
-    err = mdns_hostname_set(settings->name);
+    err = mdns_hostname_set(s_self_host);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "mdns_hostname_set failed: %s", esp_err_to_name(err));
         return err;
     }
 
-    err = mdns_instance_name_set(settings->name);
+    err = mdns_instance_name_set(s_self_name);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "mdns_instance_name_set failed: %s", esp_err_to_name(err));
         return err;
@@ -94,8 +98,8 @@ esp_err_t mdns_discovery_init(const lamp_settings_t *settings)
         return err;
     }
 
-    ESP_LOGI(TAG, "mDNS запущен: %s, сервис _ebbflow._tcp:%d, id=%s, ver=%s, chip=%s, mode=%s",
-             settings->name, 80, s_self_id, version, CONFIG_IDF_TARGET, mode);
+    ESP_LOGI(TAG, "mDNS запущен: host=%s, name=%s, сервис _ebbflow._tcp:%d, id=%s, ver=%s, chip=%s, mode=%s",
+             s_self_host, s_self_name, 80, s_self_id, version, CONFIG_IDF_TARGET, mode);
     return ESP_OK;
 }
 
@@ -118,8 +122,9 @@ int mdns_discovery_browse(mdns_peer_t *peers, int max)
     }
 
     mdns_result_t *results = NULL;
-    // Таймаут 2.5 с — достаточно для локальной сети, не слишком долго для httpd.
-    esp_err_t err = mdns_query_ptr("_ebbflow", "_tcp", 2500, 1, &results);
+    // Таймаут 4 с — Wi-Fi multicast на ESP32 иногда теряет первый пакет.
+    // max_results = max + 1, чтобы собрать всех соседей плюс собственный ответ (фильтруем ниже).
+    esp_err_t err = mdns_query_ptr("_ebbflow", "_tcp", 4000, (size_t)(max + 1), &results);
     if (err != ESP_OK) {
         ESP_LOGW(TAG, "browse не удался: %s", esp_err_to_name(err));
         return 0;
@@ -131,12 +136,9 @@ int mdns_discovery_browse(mdns_peer_t *peers, int max)
             continue;
         }
 
-        // Фильтруем собственное устройство по id или hostname (hostname без .local).
+        // Фильтруем только собственное устройство по уникальному id (MAC).
         const char *id_txt = find_txt(r->txt, r->txt_count, "id");
         if (id_txt && strcmp(id_txt, s_self_id) == 0) {
-            continue;
-        }
-        if (r->hostname && strcmp(r->hostname, s_self_name) == 0) {
             continue;
         }
 
@@ -148,9 +150,9 @@ int mdns_discovery_browse(mdns_peer_t *peers, int max)
         snprintf(p->host, sizeof(p->host), "%s.local", r->hostname);
         p->port = r->port;
 
-        // IP из первого адреса.
+        // IP из первого адреса — даём больше времени, чем раньше.
         esp_ip4_addr_t ip4_addr;
-        esp_err_t ip_err = mdns_query_a(r->hostname, 500, &ip4_addr);
+        esp_err_t ip_err = mdns_query_a(r->hostname, 1000, &ip4_addr);
         if (ip_err == ESP_OK) {
             snprintf(p->ip, sizeof(p->ip), IPSTR, IP2STR(&ip4_addr));
         } else {
