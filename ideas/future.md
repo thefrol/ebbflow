@@ -16,33 +16,6 @@
 - POST → `settings_save()` + `lamp_apply_settings()` — расписание меняется
   на лету без перезагрузки.
 
-### Открыто в v2: заменить post-build inline-assets.js на vite-plugin-singlefile
-
-Сейчас фронтенд собирается Vite, но по умолчанию Vite выдаёт `index.html` плюс
-отдельные ассеты (`assets/index.js`, `assets/index.css`). Чтобы встроить всё в
-прошивку одним файлом, используется костыль `web/scripts/inline-assets.js`:
-он после `vite build` парсит HTML, читает CSS/JS, вставляет их в `<style>` и
-`<script type="module">` вручную, экранирует `</script>` и удаляет папку
-`assets`.
-
-Это ломко и не нужно: есть штатный плагин `vite-plugin-singlefile`, который
-делает inline внутри пайплайна Vite. План:
-
-1. Установить `vite-plugin-singlefile` в `web/`.
-2. Заменить `plugins: [vue()]` на `plugins: [vue(), vitePluginSinglefile()]`.
-3. Убрать `rollupOptions.output.entryFileNames/chunkFileNames/assetFileNames`,
-   `cssCodeSplit` и прочие настройки, которые были нужны только для
-   `inline-assets.js` (хэши больше не важны, плагин сам всё свернёт).
-4. Удалить `web/scripts/inline-assets.js` и вызов `node scripts/inline-assets.js`
-   из `tools/build-web.sh` (или вообще заменить `build-web.sh` на
-   `npm run build` внутри `web/`).
-5. Убедиться, что `web/dist/index.html` остаётся одним самодостаточным
-   gzip-файлом, который `EMBED_FILES` в прошивку встраивает как раньше.
-6. Проверить на устройстве: `GET /` отдаёт `text/html` + gzip, веб-интерфейс
-   открывается, кнопки работают.
-
-Это уберёт ручной парсинг HTML и сделает сборку frontend чище.
-
 Открыто в v2: mDNS-обнаружение устройств — см. следующий раздел.
 
 ## Идентификация и обнаружение устройств в LAN
