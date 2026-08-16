@@ -365,6 +365,7 @@ void web_server_start(const lamp_settings_t *settings)
     s_settings = *settings;
 
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
+    config.max_uri_handlers = 16;  // у нас > 8 маршрутов
     httpd_handle_t server = NULL;
     if (httpd_start(&server, &config) != ESP_OK) {
         ESP_LOGE(TAG, "не удалось запустить HTTP-сервер");
@@ -384,7 +385,9 @@ void web_server_start(const lamp_settings_t *settings)
         { .uri = "/api/update/start", .method = HTTP_POST, .handler = handle_post_update_start },
     };
     for (size_t i = 0; i < sizeof(routes) / sizeof(routes[0]); i++) {
-        httpd_register_uri_handler(server, &routes[i]);
+        if (httpd_register_uri_handler(server, &routes[i]) != ESP_OK) {
+            ESP_LOGE(TAG, "не удалось зарегистрировать обработчик %s", routes[i].uri);
+        }
     }
 
     ESP_LOGI(TAG, "веб-интерфейс запущен на порту %d", config.server_port);
