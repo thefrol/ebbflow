@@ -57,6 +57,9 @@ void wifi_setup_connect(const lamp_settings_t *settings)
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
     ESP_ERROR_CHECK(esp_wifi_start());
+    // Отключаем power save: иначе ESP32-C3/C6 могут проспать mDNS-multicast,
+    // и соседи не будут находиться надёжно.
+    ESP_ERROR_CHECK(esp_wifi_set_ps(WIFI_PS_NONE));
 
     ESP_LOGI(TAG, "подключаемся к '%s'...", CONFIG_LAMP_WIFI_SSID);
     xEventGroupWaitBits(s_event_group, CONNECTED_BIT, pdFALSE, pdFALSE, portMAX_DELAY);

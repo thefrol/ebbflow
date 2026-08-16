@@ -115,66 +115,87 @@ esp_err_t mdns_discovery_update_mode(lamp_mode_t mode)
     return ESP_OK;
 }
 
+static bool peer_exists(const mdns_peer_t *peers, int count, const char *id)
+{
+    if (!id || id[0] == '\0') {
+        return false;
+    }
+    for (int i = 0; i < count; i++) {
+        if (strcmp(peers[i].id, id) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
 int mdns_discovery_browse(mdns_peer_t *peers, int max)
 {
     if (max <= 0) {
         return 0;
     }
 
-    mdns_result_t *results = NULL;
-    // Таймаут 4 с — Wi-Fi multicast на ESP32 иногда теряет первый пакет.
-    // max_results = max + 1, чтобы собрать всех соседей плюс собственный ответ (фильтруем ниже).
-    esp_err_t err = mdns_query_ptr("_ebbflow", "_tcp", 4000, (size_t)(max + 1), &results);
-    if (err != ESP_OK) {
-        ESP_LOGW(TAG, "browse не удался: %s", esp_err_to_name(err));
-        return 0;
-    }
-
     int count = 0;
-    for (mdns_result_t *r = results; r && count < max; r = r->next) {
-        if (!r->hostname || !r->addr) {
+    // До 3 попыток: multicast на ESP32 часто теряется, особенно со включённым power save.
+    // Останавливаемся раньше, если нашли всех возможных соседей.
+    for (int attempt = 0; attempt < 3 && count < max; attempt++) {
+        mdns_result_t *results = NULL;
+        // Таймаут 3 с на попытку, max_results с запасом под себя.
+        esp_err_t err = mdns_query_ptr("_ebbflow", "_tcp", 3000, (size_t)(max + 1), &results);
+        if (err != ESP_OK) {
+            ESP_LOGW(TAG, "browse попытка %d не удалась: %s", attempt + 1, esp_err_to_name(err));
             continue;
         }
 
-        // Фильтруем только собственное устройство по уникальному id (MAC).
-        const char *id_txt = find_txt(r->txt, r->txt_count, "id");
-        if (id_txt && strcmp(id_txt, s_self_id) == 0) {
-            continue;
-        }
-
-        mdns_peer_t *p = &peers[count];
-        memset(p, 0, sizeof(*p));
-
-        copy_txt_value(p->id, sizeof(p->id), id_txt);
-        copy_txt_value(p->name, sizeof(p->name), r->instance_name ? r->instance_name : r->hostname);
-        snprintf(p->host, sizeof(p->host), "%s.local", r->hostname);
-        p->port = r->port;
-
-        // IP из первого адреса — даём больше времени, чем раньше.
-        esp_ip4_addr_t ip4_addr;
-        esp_err_t ip_err = mdns_query_a(r->hostname, 1000, &ip4_addr);
-        if (ip_err == ESP_OK) {
-            snprintf(p->ip, sizeof(p->ip), IPSTR, IP2STR(&ip4_addr));
-        } else {
-            // Fallback: пробуем адрес из результата ptr.
-            if (r->addr && r->addr->addr.type == ESP_IPADDR_TYPE_V4) {
-                esp_ip4_addr_t ip4 = r->addr->addr.u_addr.ip4;
-                snprintf(p->ip, sizeof(p->ip), IPSTR, IP2STR(&ip4));
-            } else {
-                p->ip[0] = '\0';
+        for (mdns_result_t *r = results; r && count < max; r = r->next) {
+            if (!r->hostname || !r->addr) {
+                continue;
             }
+
+            // Фильтруем только собственное устройство по уникальному id (MAC).
+            const char *id_txt = find_txt(r->txt, r->txt_count, "id");
+            if (id_txt && strcmp(id_txt, s_self_id) == 0) {
+                continue;
+            }
+            // Пропускаем дубликаты между попытками.
+            if (peer_exists(peers, count, id_txt)) {
+                continue;
+            }
+
+            mdns_peer_t *p = &peers[count];
+            memset(p, 0, sizeof(*p));
+
+            copy_txt_value(p->id, sizeof(p->id), id_txt);
+            copy_txt_value(p->name, sizeof(p->name), r->instance_name ? r->instance_name : r->hostname);
+            snprintf(p->host, sizeof(p->host), "%s.local", r->hostname);
+            p->port = r->port;
+
+            // IP из первого адреса — даём больше времени, чем раньше.
+            esp_ip4_addr_t ip4_addr;
+            esp_err_t ip_err = mdns_query_a(r->hostname, 1000, &ip4_addr);
+            if (ip_err == ESP_OK) {
+                snprintf(p->ip, sizeof(p->ip), IPSTR, IP2STR(&ip4_addr));
+            } else {
+                // Fallback: пробуем адрес из результата ptr.
+                if (r->addr && r->addr->addr.type == ESP_IPADDR_TYPE_V4) {
+                    esp_ip4_addr_t ip4 = r->addr->addr.u_addr.ip4;
+                    snprintf(p->ip, sizeof(p->ip), IPSTR, IP2STR(&ip4));
+                } else {
+                    p->ip[0] = '\0';
+                }
+            }
+
+            copy_txt_value(p->version, sizeof(p->version), find_txt(r->txt, r->txt_count, "ver"));
+            copy_txt_value(p->chip, sizeof(p->chip), find_txt(r->txt, r->txt_count, "chip"));
+            copy_txt_value(p->mode, sizeof(p->mode), find_txt(r->txt, r->txt_count, "mode"));
+
+            count++;
+            ESP_LOGI(TAG, "найден сосед (попытка %d): %s (%s) at %s:%d ver=%s chip=%s mode=%s",
+                     attempt + 1, p->name, p->id, p->host, p->port, p->version, p->chip, p->mode);
         }
 
-        copy_txt_value(p->version, sizeof(p->version), find_txt(r->txt, r->txt_count, "ver"));
-        copy_txt_value(p->chip, sizeof(p->chip), find_txt(r->txt, r->txt_count, "chip"));
-        copy_txt_value(p->mode, sizeof(p->mode), find_txt(r->txt, r->txt_count, "mode"));
-
-        count++;
-        ESP_LOGI(TAG, "найден сосед: %s (%s) at %s:%d ver=%s chip=%s mode=%s",
-                 p->name, p->id, p->host, p->port, p->version, p->chip, p->mode);
+        mdns_query_results_free(results);
     }
 
-    mdns_query_results_free(results);
     ESP_LOGI(TAG, "browse завершён: найдено %d соседей", count);
     return count;
 }
