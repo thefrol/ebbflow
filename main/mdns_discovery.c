@@ -6,6 +6,7 @@
 #include "esp_app_desc.h"
 #include "esp_log.h"
 #include "esp_mac.h"
+#include "esp_netif.h"
 #include "mdns.h"
 #include "sdkconfig.h"
 
@@ -22,6 +23,17 @@ static void mac_to_id_string(char *out, size_t out_len)
     esp_read_mac(mac, ESP_MAC_WIFI_STA);
     snprintf(out, out_len, "%02x%02x%02x%02x%02x%02x",
              mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+}
+
+// Формирует уникальный hostname: если имя уже задано пользователем — без суффикса,
+// иначе добавляем MAC, чтобы новые/дефолтные устройства не конфликтовали.
+static void build_self_host(const lamp_settings_t *settings)
+{
+    if (settings->name_customized && settings->name[0] != '\0') {
+        strlcpy(s_self_host, settings->name, sizeof(s_self_host));
+    } else {
+        snprintf(s_self_host, sizeof(s_self_host), "%s-%s", settings->name, s_self_id);
+    }
 }
 
 // mode -> строка для TXT.
@@ -60,9 +72,13 @@ esp_err_t mdns_discovery_init(const lamp_settings_t *settings)
 {
     mac_to_id_string(s_self_id, sizeof(s_self_id));
     strlcpy(s_self_name, settings->name, sizeof(s_self_name));
-    // Hostname должен быть уникальным в локалке, иначе mDNS-коллизии.
-    // Для человеческого имени служит instance_name, а hostname добавляем ID по MAC.
-    snprintf(s_self_host, sizeof(s_self_host), "%s-%s", settings->name, s_self_id);
+    build_self_host(settings);
+
+    // Один hostname для mDNS и DHCP — меньше путаницы в сети.
+    esp_netif_t *netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+    if (netif != NULL) {
+        esp_netif_set_hostname(netif, s_self_host);
+    }
 
     esp_err_t err = mdns_init();
     if (err != ESP_OK) {

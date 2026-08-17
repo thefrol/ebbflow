@@ -244,7 +244,10 @@ static esp_err_t handle_post_settings(httpd_req_t *req)
             cJSON_Delete(root);
             return reject_bad_request(req, "name: слишком длинное имя");
         }
-        strlcpy(next.name, name->valuestring, sizeof(next.name));
+        if (name->valuestring[0] != '\0') {
+            strlcpy(next.name, name->valuestring, sizeof(next.name));
+            next.name_customized = true;
+        }
     }
 
     const cJSON *mode = cJSON_GetObjectItem(root, "mode");

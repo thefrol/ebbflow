@@ -22,6 +22,7 @@ typedef struct {
     int gpio;              // выходной пин лампы
     bool enabled;          // расписание активно
     char name[32];         // имя устройства (hostname, mDNS)
+    bool name_customized;  // имя было задано вручную (иначе — дефолт первого запуска)
 } lamp_settings_t;
 
 // Загружает настройки из NVS. При первом запуске (ключей нет)

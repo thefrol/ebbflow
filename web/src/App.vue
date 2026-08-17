@@ -99,7 +99,7 @@ const busy = ref(false)
 const otaBusy = ref(false)
 const saveMessage = ref('')
 const saveKind = ref<'ok' | 'err' | 'info' | ''>('')
-const peersLoading = ref(false)
+const peersLoading = ref(true)
 
 const info = ref<LampInfo | null>(null)
 const settings = ref<LampSettings>({
@@ -236,8 +236,11 @@ onMounted(async () => {
   await load()
   await updateStatusInfo()
   await updateOtaInfo()
-  await updatePeers()
   loading.value = false
+
+  // Поиск соседей по mDNS не блокирует отрисовку страницы:
+  // у него свой спиннер внутри блока «Другие лампы».
+  updatePeers()
 
   const statusInterval = setInterval(updateStatusInfo, 5000)
   const otaInterval = setInterval(updateOtaInfo, 5000)

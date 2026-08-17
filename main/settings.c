@@ -33,18 +33,6 @@ static esp_err_t get_or_seed_i32(nvs_handle_t handle, const char *key, int32_t *
     return err;
 }
 
-// То же для строки.
-static esp_err_t get_or_seed_str(nvs_handle_t handle, const char *key, char *value, size_t max_len)
-{
-    size_t len = max_len;
-    esp_err_t err = nvs_get_str(handle, key, value, &len);
-    if (err == ESP_ERR_NVS_NOT_FOUND) {
-        ESP_LOGI(TAG, "первый запуск: %s = %s (из menuconfig)", key, value);
-        err = nvs_set_str(handle, key, value);
-    }
-    return err;
-}
-
 esp_err_t settings_load(lamp_settings_t *out)
 {
     // Дефолты из Kconfig
@@ -59,6 +47,7 @@ esp_err_t settings_load(lamp_settings_t *out)
 #endif
     out->pulse_interval_min = CONFIG_LAMP_PULSE_INTERVAL_MIN;
     out->pulse_duration_sec = CONFIG_LAMP_PULSE_DURATION_SEC;
+    out->name_customized = false;
     strlcpy(out->name, CONFIG_LAMP_DEVICE_NAME, sizeof(out->name));
 
     nvs_handle_t handle;
@@ -75,6 +64,7 @@ esp_err_t settings_load(lamp_settings_t *out)
     int32_t mode = out->mode;
     int32_t p_int = out->pulse_interval_min;
     int32_t p_dur = out->pulse_duration_sec;
+    int32_t name_set = 0;
 
     err = get_or_seed_i32(handle, "on_min", &on_min);
     if (err == ESP_OK) err = get_or_seed_i32(handle, "off_min", &off_min);
@@ -83,7 +73,36 @@ esp_err_t settings_load(lamp_settings_t *out)
     if (err == ESP_OK) err = get_or_seed_i32(handle, "mode", &mode);
     if (err == ESP_OK) err = get_or_seed_i32(handle, "p_int", &p_int);
     if (err == ESP_OK) err = get_or_seed_i32(handle, "p_dur", &p_dur);
-    if (err == ESP_OK) err = get_or_seed_str(handle, "name", out->name, sizeof(out->name));
+
+    // Имя обрабатываем отдельно: при первом запуске добавляем в NVS дефолт,
+    // а при отсутствии флага name_set при уже сохранённом имени считаем,
+    // что устройство уже было настроено (миграция со старых прошивок).
+    if (err == ESP_OK) {
+        size_t name_len = sizeof(out->name);
+        esp_err_t name_err = nvs_get_str(handle, "name", out->name, &name_len);
+        if (name_err == ESP_ERR_NVS_NOT_FOUND) {
+            ESP_LOGI(TAG, "первый запуск: name = %s (из menuconfig)", out->name);
+            name_err = nvs_set_str(handle, "name", out->name);
+            if (name_err == ESP_OK) {
+                name_set = 0;
+                name_err = nvs_set_i32(handle, "name_set", 0);
+            }
+        } else if (name_err == ESP_OK) {
+            esp_err_t flag_err = nvs_get_i32(handle, "name_set", &name_set);
+            if (flag_err == ESP_ERR_NVS_NOT_FOUND) {
+                ESP_LOGI(TAG, "миграция: ранее сохранённое имя '%s' считаем заданным", out->name);
+                name_set = 1;
+                flag_err = nvs_set_i32(handle, "name_set", 1);
+            }
+            if (flag_err != ESP_OK) {
+                name_err = flag_err;
+            }
+        }
+        if (name_err != ESP_OK) {
+            err = name_err;
+        }
+    }
+
     if (err == ESP_OK) err = nvs_commit(handle);
 
     nvs_close(handle);
@@ -101,6 +120,7 @@ esp_err_t settings_load(lamp_settings_t *out)
     out->mode = mode == LAMP_MODE_PULSE ? LAMP_MODE_PULSE : LAMP_MODE_SCHEDULE;
     out->pulse_interval_min = p_int;
     out->pulse_duration_sec = p_dur;
+    out->name_customized = name_set != 0;
     return ESP_OK;
 }
 
@@ -120,6 +140,7 @@ esp_err_t settings_save(const lamp_settings_t *settings)
     if (err == ESP_OK) err = nvs_set_i32(handle, "p_int", settings->pulse_interval_min);
     if (err == ESP_OK) err = nvs_set_i32(handle, "p_dur", settings->pulse_duration_sec);
     if (err == ESP_OK) err = nvs_set_str(handle, "name", settings->name);
+    if (err == ESP_OK) err = nvs_set_i32(handle, "name_set", settings->name_customized ? 1 : 0);
     if (err == ESP_OK) err = nvs_commit(handle);
 
     nvs_close(handle);
