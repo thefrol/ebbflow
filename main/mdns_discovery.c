@@ -7,6 +7,9 @@
 #include "esp_log.h"
 #include "esp_mac.h"
 #include "esp_netif.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
+#include "freertos/task.h"
 #include "mdns.h"
 #include "sdkconfig.h"
 
@@ -15,6 +18,13 @@ static const char *TAG = "mdns";
 static char s_self_id[MDNS_PEER_ID_LEN];
 static char s_self_name[MDNS_PEER_NAME_LEN];
 static char s_self_host[MDNS_PEER_HOST_LEN];
+
+// Кэш найденных соседей: обновляется в фоновой задаче, читается из HTTP.
+static mdns_peer_t s_cached_peers[MDNS_PEERS_MAX];
+static int s_cached_count = 0;
+static SemaphoreHandle_t s_cache_mutex = NULL;
+
+#define PEERS_REFRESH_MS 30000
 
 // Формирует id из MAC (6 байт -> 12 hex + '\0').
 static void mac_to_id_string(char *out, size_t out_len)
@@ -41,6 +51,8 @@ static const char *mode_to_str(lamp_mode_t mode)
 {
     return mode == LAMP_MODE_PULSE ? "pulse" : "schedule";
 }
+
+static void mdns_discovery_task(void *arg);
 
 // Безопасно копирует строку из TXT в буфер.
 static void copy_txt_value(char *out, size_t out_len, const char *value)
@@ -116,6 +128,20 @@ esp_err_t mdns_discovery_init(const lamp_settings_t *settings)
 
     ESP_LOGI(TAG, "mDNS запущен: host=%s, name=%s, сервис _ebbflow._tcp:%d, id=%s, ver=%s, chip=%s, mode=%s",
              s_self_host, s_self_name, 80, s_self_id, version, CONFIG_IDF_TARGET, mode);
+
+    s_cache_mutex = xSemaphoreCreateMutex();
+    if (s_cache_mutex == NULL) {
+        ESP_LOGE(TAG, "не удалось создать мьютекс для кэша соседей");
+        return ESP_ERR_NO_MEM;
+    }
+
+    BaseType_t task_err = xTaskCreate(
+        mdns_discovery_task, "mdns_browse", 4096, NULL,
+        tskIDLE_PRIORITY + 3, NULL);
+    if (task_err != pdPASS) {
+        ESP_LOGE(TAG, "не удалось запустить фоновую задачу поиска соседей");
+        return ESP_ERR_NO_MEM;
+    }
     return ESP_OK;
 }
 
@@ -213,5 +239,43 @@ int mdns_discovery_browse(mdns_peer_t *peers, int max)
     }
 
     ESP_LOGI(TAG, "browse завершён: найдено %d соседей", count);
+    return count;
+}
+
+// Фоновая задача: раз в PEERS_REFRESH_MS обновляет закэшированный список соседей.
+// HTTP-обработчик не ждёт browse, а сразу отдаёт копию кэша.
+static void mdns_discovery_task(void *arg)
+{
+    (void)arg;
+    while (true) {
+        mdns_peer_t peers[MDNS_PEERS_MAX];
+        int count = mdns_discovery_browse(peers, MDNS_PEERS_MAX);
+
+        if (s_cache_mutex != NULL && xSemaphoreTake(s_cache_mutex, portMAX_DELAY) == pdTRUE) {
+            s_cached_count = count < MDNS_PEERS_MAX ? count : MDNS_PEERS_MAX;
+            for (int i = 0; i < s_cached_count; i++) {
+                s_cached_peers[i] = peers[i];
+            }
+            xSemaphoreGive(s_cache_mutex);
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(PEERS_REFRESH_MS));
+    }
+}
+
+int mdns_discovery_peers_get(mdns_peer_t *peers, int max)
+{
+    if (!peers || max <= 0) {
+        return 0;
+    }
+
+    int count = 0;
+    if (s_cache_mutex != NULL && xSemaphoreTake(s_cache_mutex, portMAX_DELAY) == pdTRUE) {
+        count = s_cached_count < max ? s_cached_count : max;
+        for (int i = 0; i < count; i++) {
+            peers[i] = s_cached_peers[i];
+        }
+        xSemaphoreGive(s_cache_mutex);
+    }
     return count;
 }

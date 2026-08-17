@@ -100,12 +100,12 @@ static esp_err_t handle_get_info(httpd_req_t *req)
     return send_json(req, json);
 }
 
-#define PEERS_MAX 8
-
 static esp_err_t handle_get_peers(httpd_req_t *req)
 {
-    mdns_peer_t peers[PEERS_MAX];
-    int n = mdns_discovery_browse(peers, PEERS_MAX);
+    // Отдаём закэшированный результат фоновой mDNS-задачи,
+    // чтобы HTTP-обработчик не блокировал другие запросы на несколько секунд.
+    mdns_peer_t peers[MDNS_PEERS_MAX];
+    int n = mdns_discovery_peers_get(peers, MDNS_PEERS_MAX);
 
     cJSON *root = cJSON_CreateArray();
     for (int i = 0; i < n; i++) {

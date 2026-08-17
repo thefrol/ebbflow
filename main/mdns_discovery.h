@@ -6,6 +6,8 @@
 
 #include "settings.h"
 
+#define MDNS_PEERS_MAX 8
+
 // Информация о соседнем устройстве, найденном через mDNS.
 #define MDNS_PEER_ID_LEN 32
 #define MDNS_PEER_NAME_LEN 32
@@ -36,4 +38,10 @@ esp_err_t mdns_discovery_update_mode(lamp_mode_t mode);
 // Ищет соседние устройства через mDNS browse. Таймаут ~2.5 с.
 // peers — буфер, max — его размер. Возвращает количество найденных (0..max).
 // Собственное устройство отфильтровывается.
+// Блокирующий: используется фоновой задачей, а не HTTP-обработчиком.
 int mdns_discovery_browse(mdns_peer_t *peers, int max);
+
+// Возвращает последний закэшированный список соседей (копия из фоновой задачи).
+// Быстрая, не блокирует HTTP-обработчик. peers — буфер, max — размер.
+// Возвращает количество записей (0..max).
+int mdns_discovery_peers_get(mdns_peer_t *peers, int max);
