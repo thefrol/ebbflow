@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.16)
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 # Версия прошивки. Релизные сборки в CI переопределяют её тегом
 # (idf.py build -DPROJECT_VER=x.y.z); OTA сравнивает её с тегом релиза.
-project(ebbflow-lamp VERSION 0.11.6)
+project(ebbflow-lamp VERSION 0.12.0)
 
 # Сборка frontend (Vue 3 + Vite) и сжатие index.html для встраивания в прошивку.
 # Запускается как отдельная цель, от которой зависит app.

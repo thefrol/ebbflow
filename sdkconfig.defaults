@@ -20,3 +20,7 @@ CONFIG_COMPILER_OPTIMIZATION_SIZE=y
 # подтвердить работоспособность (esp_ota_mark_app_valid_cancel_rollback
 # в main.c после подключения к Wi-Fi), иначе загрузчик вернёт предыдущую.
 CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y
+
+# Общий mDNS-домен флота: все лампы отвечают на ebbflow.local,
+# страница любой из них показывает весь флот.
+CONFIG_LAMP_FLEET_HOSTNAME="ebbflow"

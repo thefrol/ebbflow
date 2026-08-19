@@ -16,42 +16,44 @@ async function req<T>(url: string, init?: RequestInit): Promise<T> {
   return r.json() as Promise<T>
 }
 
-export function getInfo() {
-  return req<LampInfo>('/api/info')
+// base — префикс устройства: '' для той лампы, что отдала страницу,
+// 'http://<ip>' для соседей (на прошивке включён CORS).
+export function getInfo(base = '') {
+  return req<LampInfo>(base + '/api/info')
 }
 
-export function getPeers() {
-  return req<LampPeer[]>('/api/peers')
+export function getPeers(base = '') {
+  return req<LampPeer[]>(base + '/api/peers')
 }
 
-export function getSettings() {
-  return req<LampSettings>('/api/settings')
+export function getSettings(base = '') {
+  return req<LampSettings>(base + '/api/settings')
 }
 
-export function saveSettings(body: LampSettings) {
-  return req<LampSettings>('/api/settings', {
+export function saveSettings(body: LampSettings, base = '') {
+  return req<LampSettings>(base + '/api/settings', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   })
 }
 
-export function getStatus() {
-  return req<LampStatus>('/api/status')
+export function getStatus(base = '') {
+  return req<LampStatus>(base + '/api/status')
 }
 
-export function waterNow() {
-  return req<LampStatus>('/api/water-now', { method: 'POST' })
+export function waterNow(base = '') {
+  return req<LampStatus>(base + '/api/water-now', { method: 'POST' })
 }
 
-export function checkUpdate() {
-  return req<UpdateStatus>('/api/update/check', { method: 'POST' })
+export function checkUpdate(base = '') {
+  return req<UpdateStatus>(base + '/api/update/check', { method: 'POST' })
 }
 
-export function startUpdate() {
-  return req<{ status: string }>('/api/update/start', { method: 'POST' })
+export function startUpdate(base = '') {
+  return req<{ status: string }>(base + '/api/update/start', { method: 'POST' })
 }
 
-export function getUpdateStatus() {
-  return req<UpdateStatus>('/api/update/status')
+export function getUpdateStatus(base = '') {
+  return req<UpdateStatus>(base + '/api/update/status')
 }

@@ -7,6 +7,16 @@ menu "Ebbflow Lamp"
             Используется как hostname в сети. В будущем — основа для
             mDNS-имени и идентификатора устройства во флоте.
 
+    config LAMP_FLEET_HOSTNAME
+        string "Общий домен флота (mDNS, без .local)"
+        default "ebbflow"
+        help
+            Все устройства флота дополнительно отвечают на этот hostname
+            через mDNS (mdns_delegate_hostname_add): зашёл на
+            http://ebbflow.local/ — попал на любую живую лампу, а её
+            страница показывает весь флот. Уникальный hostname устройства
+            (<имя>.local) при этом сохраняется.
+
     config LAMP_WIFI_SSID
         string "Wi-Fi SSID"
         default "YOUR_SSID"

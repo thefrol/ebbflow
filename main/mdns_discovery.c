@@ -126,6 +126,27 @@ esp_err_t mdns_discovery_init(const lamp_settings_t *settings)
         return err;
     }
 
+    // Общий домен флота: на него отвечает каждая лампа, браузер попадёт
+    // на любую живую — её страница всё равно агрегирует весь флот.
+    // Ошибка не фатальна: уникальный hostname уже работает.
+    if (netif != NULL) {
+        esp_netif_ip_info_t ip_info;
+        if (esp_netif_get_ip_info(netif, &ip_info) == ESP_OK) {
+            mdns_ip_addr_t addr = {
+                .addr = { .type = ESP_IPADDR_TYPE_V4,
+                          .u_addr = { .ip4 = ip_info.ip } },
+                .next = NULL,
+            };
+            err = mdns_delegate_hostname_add(CONFIG_LAMP_FLEET_HOSTNAME, &addr);
+            if (err != ESP_OK) {
+                ESP_LOGW(TAG, "общий домен флота %s.local не добавлен: %s",
+                         CONFIG_LAMP_FLEET_HOSTNAME, esp_err_to_name(err));
+            } else {
+                ESP_LOGI(TAG, "общий домен флота: %s.local", CONFIG_LAMP_FLEET_HOSTNAME);
+            }
+        }
+    }
+
     ESP_LOGI(TAG, "mDNS запущен: host=%s, name=%s, сервис _ebbflow._tcp:%d, id=%s, ver=%s, chip=%s, mode=%s",
              s_self_host, s_self_name, 80, s_self_id, version, CONFIG_IDF_TARGET, mode);
 

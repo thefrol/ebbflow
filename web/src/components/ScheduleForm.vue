@@ -1,10 +1,14 @@
 <template>
   <div class="schedule-form">
-    <label for="on">Включение</label>
-    <input id="on" v-model="model.on" type="time" required />
+    <label>
+      Включение
+      <input v-model="model.on" type="time" required />
+    </label>
 
-    <label for="off">Выключение</label>
-    <input id="off" v-model="model.off" type="time" required />
+    <label>
+      Выключение
+      <input v-model="model.off" type="time" required />
+    </label>
 
     <p class="hint">
       Расписание работает через полночь: если «включение» позже «выключения», лампа горит ночью.

@@ -89,7 +89,16 @@ NVS. Поменять их на прошитом устройстве проще
   `GET/POST /api/settings` (режим `mode`, времена в "HH:MM", параметры
   импульсов) и `GET /api/info`
   (имя/версия/чип — задел под сканер флота). Изменения сохраняются в NVS
-  и применяются на лету через `lamp_apply_settings`.
+  и применяются на лету через `lamp_apply_settings`. На всех API-ответах
+  стоит CORS `Access-Control-Allow-Origin: *` (+ OPTIONS-preflight на POST
+  маршрутах) — флот-страница обращается к соседям напрямую из браузера.
+- `main/mdns_discovery.*` — mDNS: уникальный hostname `<имя>[-mac].local`,
+  сервис `_ebbflow._tcp` с TXT-визиткой (id/ver/chip/mode), фоновая задача
+  browse соседей с кэшем (30 с) для `GET /api/peers`. Дополнительно каждая
+  лампа делегирует общий домен флота `CONFIG_LAMP_FLEET_HOSTNAME`
+  (дефолт `ebbflow`): `http://ebbflow.local/` открывает любую живую лампу,
+  а её страница (`App.vue` + `DeviceCard.vue`) показывает карточки всех
+  устройств флота с полным управлением — без переходов между доменами.
 - `main/Kconfig.projbuild` — дефолты: Wi-Fi, пин, времена, режим и параметры
   импульсов, TZ, имя устройства, OTA (репозиторий, интервал).
 - `partitions.csv` — разметка флеша: 2 OTA-слота по ~1.9M, без factory.

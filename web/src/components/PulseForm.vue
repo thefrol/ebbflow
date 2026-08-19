@@ -1,24 +1,14 @@
 <template>
   <div class="pulse-form">
-    <label for="pulse_interval_min">Полив каждые, минут</label>
-    <input
-      id="pulse_interval_min"
-      v-model.number="model.pulse_interval_min"
-      type="number"
-      min="1"
-      max="1440"
-      required
-    />
+    <label>
+      Полив каждые, минут
+      <input v-model.number="model.pulse_interval_min" type="number" min="1" max="1440" required />
+    </label>
 
-    <label for="pulse_duration_sec">Длительность полива, секунд</label>
-    <input
-      id="pulse_duration_sec"
-      v-model.number="model.pulse_duration_sec"
-      type="number"
-      min="1"
-      max="600"
-      required
-    />
+    <label>
+      Длительность полива, секунд
+      <input v-model.number="model.pulse_duration_sec" type="number" min="1" max="600" required />
+    </label>
 
     <div v-if="status" class="pulse-status">
       <div class="row">

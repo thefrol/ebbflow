@@ -50,9 +50,21 @@ static char *settings_to_json(const lamp_settings_t *s)
 static esp_err_t send_json(httpd_req_t *req, char *json)
 {
     httpd_resp_set_type(req, "application/json");
+    // Флот-страница обращается к соседям напрямую из браузера (cross-origin).
+    httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
     esp_err_t err = httpd_resp_send(req, json, strlen(json));
     cJSON_free(json);
     return err;
+}
+
+// Preflight для cross-origin POST с JSON-телом (флот-страница -> соседи).
+static esp_err_t handle_options(httpd_req_t *req)
+{
+    httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+    httpd_resp_set_hdr(req, "Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    httpd_resp_set_hdr(req, "Access-Control-Allow-Headers", "Content-Type");
+    httpd_resp_set_status(req, "204 No Content");
+    return httpd_resp_send(req, NULL, 0);
 }
 
 // Читает тело запроса целиком в buf (с '\0'). false — тело не влезло.
@@ -78,6 +90,7 @@ static esp_err_t reject_bad_request(httpd_req_t *req, const char *reason)
     ESP_LOGW(TAG, "POST отклонён: %s", reason);
     httpd_resp_set_status(req, "400 Bad Request");
     httpd_resp_set_type(req, "text/plain");
+    httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
     return httpd_resp_sendstr(req, reason);
 }
 
@@ -289,6 +302,7 @@ static esp_err_t handle_post_settings(httpd_req_t *req)
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "settings_save failed: %s", esp_err_to_name(err));
         httpd_resp_set_status(req, "500 Internal Server Error");
+        httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
         return httpd_resp_sendstr(req, "не удалось сохранить в NVS");
     }
 
@@ -342,6 +356,7 @@ static esp_err_t handle_post_update_check(httpd_req_t *req)
     esp_err_t err = ota_update_check_now();
     if (err != ESP_OK) {
         httpd_resp_set_status(req, "503 Service Unavailable");
+        httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
         return httpd_resp_sendstr(req, "OTA не настроена");
     }
     return handle_get_update_status(req);
@@ -353,6 +368,7 @@ static esp_err_t handle_post_update_start(httpd_req_t *req)
     esp_err_t err = ota_update_start_download();
     if (err != ESP_OK) {
         httpd_resp_set_status(req, "409 Conflict");
+        httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
         return httpd_resp_sendstr(req, "обновление недоступно или уже выполняется");
     }
 
@@ -368,7 +384,7 @@ void web_server_start(const lamp_settings_t *settings)
     s_settings = *settings;
 
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
-    config.max_uri_handlers = 16;  // у нас > 8 маршрутов
+    config.max_uri_handlers = 20;  // у нас > 8 маршрутов + OPTIONS для CORS
     httpd_handle_t server = NULL;
     if (httpd_start(&server, &config) != ESP_OK) {
         ESP_LOGE(TAG, "не удалось запустить HTTP-сервер");
@@ -386,6 +402,11 @@ void web_server_start(const lamp_settings_t *settings)
         { .uri = "/api/update/status", .method = HTTP_GET, .handler = handle_get_update_status },
         { .uri = "/api/update/check", .method = HTTP_POST, .handler = handle_post_update_check },
         { .uri = "/api/update/start", .method = HTTP_POST, .handler = handle_post_update_start },
+        // CORS preflight для cross-origin запросов флот-страницы к соседям.
+        { .uri = "/api/settings", .method = HTTP_OPTIONS, .handler = handle_options },
+        { .uri = "/api/water-now", .method = HTTP_OPTIONS, .handler = handle_options },
+        { .uri = "/api/update/check", .method = HTTP_OPTIONS, .handler = handle_options },
+        { .uri = "/api/update/start", .method = HTTP_OPTIONS, .handler = handle_options },
     };
     for (size_t i = 0; i < sizeof(routes) / sizeof(routes[0]); i++) {
         if (httpd_register_uri_handler(server, &routes[i]) != ESP_OK) {
